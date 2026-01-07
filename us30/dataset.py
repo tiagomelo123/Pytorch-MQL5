@@ -9,7 +9,7 @@ from pathlib import Path
 # =========================
 SYMBOL = "US30"          # ajuste para seu símbolo (ex: "US30", "US30.cash", etc.)
 TIMEFRAME = mt5.TIMEFRAME_D1
-N_BARS = 100           # quantos candles puxar
+N_BARS = 2000           # quantos candles puxar
 
 ATR_PERIOD = 14
 HORIZON = 5

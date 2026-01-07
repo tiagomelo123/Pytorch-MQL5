@@ -6,16 +6,19 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import WeightedRandomSampler
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
-
+from pathlib import Path
 
 # =========================
 # CONFIG (ajuste aqui)
 # =========================
-CSV_PATH   = "dataset.csv"
+BASE_DIR = Path(__file__).resolve().parent
+CSV_PATH = BASE_DIR / "dataset.csv"
+
 OUT_DIR    = "artifacts_3class"
 
 LABEL_COL  = "label"   # coluna com 0/1/2
@@ -71,6 +74,56 @@ def get_feature_cols(df: pd.DataFrame, label_col: str) -> list:
     if label_col in num_cols:
         num_cols.remove(label_col)
     return num_cols
+
+def add_stationary_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # Segurança: ordena por tempo se existir
+    if "time" in df.columns:
+        df = df.sort_values("time").reset_index(drop=True)
+
+    # -------- Retornos (mais importantes) --------
+    df["ret_1"]  = df["close"].pct_change(1)
+    df["ret_5"]  = df["close"].pct_change(5)
+    df["ret_10"] = df["close"].pct_change(10)
+
+    # -------- Range / corpo do candle (normalizados) --------
+    df["range_n"] = (df["high"] - df["low"]) / df["close"].replace(0, np.nan)
+    df["body_n"]  = (df["close"] - df["open"]) / df["open"].replace(0, np.nan)
+    df["upper_wick_n"] = (df["high"] - df[["open","close"]].max(axis=1)) / df["close"].replace(0, np.nan)
+    df["lower_wick_n"] = (df[["open","close"]].min(axis=1) - df["low"]) / df["close"].replace(0, np.nan)
+
+    # -------- ATR normalizado --------
+    if "atr" in df.columns:
+        df["atr_n"] = df["atr"] / df["close"].replace(0, np.nan)
+
+    # -------- Médias e distância relativa --------
+    df["ma_10"] = df["close"].rolling(10).mean()
+    df["ma_20"] = df["close"].rolling(20).mean()
+    df["ma_50"] = df["close"].rolling(50).mean()
+
+    df["dist_ma10"] = (df["close"] - df["ma_10"]) / df["ma_10"]
+    df["dist_ma20"] = (df["close"] - df["ma_20"]) / df["ma_20"]
+    df["dist_ma50"] = (df["close"] - df["ma_50"]) / df["ma_50"]
+
+    # -------- Inclinação (tendência) --------
+    df["ma20_slope"] = df["ma_20"].pct_change(5)
+
+    # -------- Volume relativo (se tick_volume existir) --------
+    if "tick_volume" in df.columns:
+        vol_ma = df["tick_volume"].rolling(20).mean()
+        df["vol_rel"] = df["tick_volume"] / vol_ma
+
+    # -------- Spread relativo (opcional, mas melhor que spread absoluto) --------
+    if "spread" in df.columns:
+        df["spread_n"] = df["spread"] / df["close"].replace(0, np.nan)
+
+    # Remova colunas intermediárias que você não quer como feature
+    # (as MAs podem ser removidas; as distâncias são melhores)
+    drop_cols = ["ma_10","ma_20","ma_50"]
+    df.drop(columns=[c for c in drop_cols if c in df.columns], inplace=True)
+
+    return df
 
 
 # =========================
@@ -136,25 +189,44 @@ def main():
     set_seed(SEED)
     makedirs(OUT_DIR)
 
-    # 1) Load
+    # ====== LOAD ======
     df = pd.read_csv(CSV_PATH)
-    df["label"] = df["label"].astype(int)
+    print("DF rows (raw):", len(df))
 
-    if LABEL_COL not in df.columns:
-        raise ValueError(f"Não encontrei a coluna LABEL_COL='{LABEL_COL}' no CSV.")
+    # Se tiver time, garante ordenação temporal
+    if "time" in df.columns:
+        df["time"] = pd.to_datetime(df["time"], errors="coerce")
+        df = df.sort_values("time").reset_index(drop=True)
 
-    # garante labels como int 0/1/2
-    df[LABEL_COL] = df[LABEL_COL].astype(int)
+    # ====== FEATURE ENGINEERING ======
+    df = add_stationary_features(df)
 
-    feat_cols = get_feature_cols(df, LABEL_COL)
-    if len(feat_cols) == 0:
-        raise ValueError("Não encontrei colunas numéricas de feature. Defina FEATURE_COLS manualmente.")
+    # Remove real_volume (constante)
+    if "real_volume" in df.columns:
+        df = df.drop(columns=["real_volume"])
 
-    # remove NaNs
-    df = df.dropna(subset=feat_cols + [LABEL_COL]).copy()
+    # Remove OHLC/atr/spread absolutos (vamos usar só as versões normalizadas/relativas)
+    drop_abs = ["open", "high", "low", "close", "atr", "spread"]
+    df = df.drop(columns=[c for c in drop_abs if c in df.columns])
 
-    X = df[feat_cols].to_numpy()
-    y = df[LABEL_COL].to_numpy()
+    # Remove linhas com NaN (por causa de rolling/pct_change)
+    df = df.dropna().reset_index(drop=True)
+    print("DF rows (after features/dropna):", len(df))
+
+    # ====== LABEL ======
+    if "label" not in df.columns:
+        raise RuntimeError("Coluna 'label' não encontrada no CSV.")
+
+    y = df["label"].astype(int).to_numpy()
+
+    # ====== FEATURES LIST ======
+    FEATURE_COLS = feat_cols = [c for c in df.columns if c not in ("label", "label_name", "time")]
+    print("FEATURE_COLS:", FEATURE_COLS)
+
+    X = df[FEATURE_COLS].to_numpy(dtype=np.float32)
+
+    # Debug: distribuição geral
+    print("Class dist ALL:", np.bincount(y, minlength=3))
 
     # 2) Split temporal (shuffle=False)
     X_train, X_temp, y_train, y_temp = train_test_split(
@@ -164,6 +236,10 @@ def main():
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=(1.0 - val_ratio), random_state=SEED, shuffle=False
     )
+
+    print("Class dist TRAIN:", np.bincount(y_train, minlength=3))
+    print("Class dist VAL:  ", np.bincount(y_val, minlength=3))
+    print("Class dist TEST: ", np.bincount(y_test, minlength=3))
 
     # 3) Normalização
     scaler = StandardScaler()
@@ -181,8 +257,17 @@ def main():
     with open(os.path.join(OUT_DIR, "scaler.json"), "w", encoding="utf-8") as f:
         json.dump(scaler_payload, f, ensure_ascii=False, indent=2)
 
+    class_counts = np.bincount(y_train, minlength=3)
+    sample_w = 1.0 / class_counts[y_train]
+
+    sampler = WeightedRandomSampler(
+        weights=torch.tensor(sample_w, dtype=torch.double),
+        num_samples=len(y_train),
+        replacement=True
+    )    
+
     # 4) DataLoaders
-    train_loader = DataLoader(TabDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
+    train_loader = DataLoader(TabDataset(X_train, y_train), batch_size=BATCH_SIZE, sampler=sampler )
     val_loader   = DataLoader(TabDataset(X_val, y_val), batch_size=BATCH_SIZE, shuffle=False)
     test_loader  = DataLoader(TabDataset(X_test, y_test), batch_size=BATCH_SIZE, shuffle=False)
 
