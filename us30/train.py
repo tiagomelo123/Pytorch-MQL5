@@ -258,13 +258,14 @@ def main():
         json.dump(scaler_payload, f, ensure_ascii=False, indent=2)
 
     class_counts = np.bincount(y_train, minlength=3)
-    sample_w = 1.0 / class_counts[y_train]
+    class_w = 1.0 / np.sqrt(class_counts + 1e-9)
+    sample_w = class_w[y_train]
 
     sampler = WeightedRandomSampler(
         weights=torch.tensor(sample_w, dtype=torch.double),
         num_samples=len(y_train),
         replacement=True
-    )    
+    )
 
     # 4) DataLoaders
     train_loader = DataLoader(TabDataset(X_train, y_train), batch_size=BATCH_SIZE, sampler=sampler )
@@ -279,7 +280,7 @@ def main():
 
     # 6) Model
     model = MLP(in_dim=X_train.shape[1], hidden=HIDDEN, dropout=DROPOUT, num_classes=3).to(DEVICE)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
     best_path = os.path.join(OUT_DIR, "best_model.pt")
