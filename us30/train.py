@@ -11,6 +11,7 @@ from torch.utils.data import WeightedRandomSampler
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import f1_score
 from pathlib import Path
 
 # =========================
@@ -117,6 +118,11 @@ def add_stationary_features(df: pd.DataFrame) -> pd.DataFrame:
     # -------- Spread relativo (opcional, mas melhor que spread absoluto) --------
     if "spread" in df.columns:
         df["spread_n"] = df["spread"] / df["close"].replace(0, np.nan)
+
+    hh20 = df["close"].rolling(20).max()
+    ll20 = df["close"].rolling(20).min()
+    df["hh20"] = (df["close"] / hh20) - 1.0
+    df["ll20"] = (df["close"] / ll20) - 1.0    
 
     # Remova colunas intermediárias que você não quer como feature
     # (as MAs podem ser removidas; as distâncias são melhores)
@@ -258,7 +264,8 @@ def main():
         json.dump(scaler_payload, f, ensure_ascii=False, indent=2)
 
     class_counts = np.bincount(y_train, minlength=3)
-    class_w = 1.0 / np.sqrt(class_counts + 1e-9)
+    alpha = 0.7
+    class_w = 1.0 / (class_counts ** alpha + 1e-9)
     sample_w = class_w[y_train]
 
     sampler = WeightedRandomSampler(
@@ -363,7 +370,7 @@ def main():
         output_names=["logits"],
         opset_version=18,
         do_constant_folding=True,
-        dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
+        dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}}        
     )
 
     print(f"\n✅ Salvo em {OUT_DIR}:")
