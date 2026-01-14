@@ -322,7 +322,7 @@ def train(cfg: TrainConfig):
         onnx_path,
         input_names=["input"],
         output_names=["logits"],
-        opset_version=18,
+        opset_version=17,
         do_constant_folding=True,
         dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
     )
