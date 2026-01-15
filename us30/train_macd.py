@@ -324,7 +324,7 @@ def train(cfg: TrainConfig):
         output_names=["logits"],
         opset_version=17,
         do_constant_folding=True,
-        dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
+        #dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
     )
     print(f"\nSaved ONNX: {onnx_path}")
     print(f"Saved scaler: {scaler_path}")
