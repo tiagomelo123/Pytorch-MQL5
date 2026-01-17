@@ -33,7 +33,7 @@ def main():
     ap.add_argument(
         "--horizon",
         type=int,
-        default=5,
+        default=15,
         help="Quantidade de candles à frente para medir retorno",
     )
     ap.add_argument(
@@ -49,7 +49,7 @@ def main():
 
     # saída padrão automática
     if args.out_csv is None:
-        args.out_csv = os.path.join("out", f"binned_h{args.horizon}.csv")
+        args.out_csv = BASE_DIR / os.path.join("out", f"binned_h{args.horizon}.csv")
 
     df = pd.read_csv(args.csv)
     df["time"] = pd.to_datetime(df["time"])
