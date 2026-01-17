@@ -20,22 +20,53 @@ def rma(s: pd.Series, period: int) -> pd.Series:
 
 def ema_mt5(series: pd.Series, period: int) -> pd.Series:
     """
-    EMA com seed por SMA (estilo plataforma MT5).
+    EMA com seed por SMA (estilo MT5), robusta a NaNs iniciais.
+    - Só inicia quando houver 'period' valores válidos (não-NaN).
+    - Antes disso retorna NaN.
     """
     s = series.astype("float64").values
-    out = np.full_like(s, np.nan, dtype="float64")
+    n = len(s)
+    out = np.full(n, np.nan, dtype="float64")
 
-    if len(s) < period:
+    if n < period:
+        return pd.Series(out, index=series.index)
+
+    # encontra o primeiro índice onde conseguimos uma janela de 'period' valores válidos
+    valid = ~np.isnan(s)
+    # se nem existe 'period' valores válidos no total, retorna tudo NaN
+    if valid.sum() < period:
+        return pd.Series(out, index=series.index)
+
+    # vamos achar o primeiro ponto onde, olhando para trás, existem 'period' válidos
+    # estratégia simples: varrer até acumular period válidos
+    count = 0
+    start = None
+    for i in range(n):
+        if valid[i]:
+            count += 1
+        if count == period:
+            start = i  # índice do último elemento da primeira janela válida
+            break
+
+    if start is None:
         return pd.Series(out, index=series.index)
 
     alpha = 2.0 / (period + 1.0)
 
-    # seed = SMA dos primeiros 'period'
-    seed_idx = period - 1
-    out[seed_idx] = np.nanmean(s[:period])
+    # seed = SMA dos últimos 'period' valores válidos até 'start'
+    # pega a fatia e filtra NaNs
+    window = s[:start + 1]
+    window = window[~np.isnan(window)]
+    seed = window[-period:].mean()
 
-    for i in range(seed_idx + 1, len(s)):
-        out[i] = out[i - 1] + alpha * (s[i] - out[i - 1])
+    out[start] = seed
+
+    # a partir daí, EMA recursiva, mas só atualiza quando o valor existir
+    for i in range(start + 1, n):
+        if np.isnan(s[i]):
+            out[i] = out[i - 1]  # mantém último valor (ou deixe NaN, se preferir)
+        else:
+            out[i] = out[i - 1] + alpha * (s[i] - out[i - 1])
 
     return pd.Series(out, index=series.index)
 
