@@ -3,13 +3,13 @@ import json
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
-
 from sklearn.metrics import f1_score, classification_report, confusion_matrix
+from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent
 
 # =========================
 # Config
@@ -17,8 +17,8 @@ from sklearn.metrics import f1_score, classification_report, confusion_matrix
 
 @dataclass
 class TrainConfig:
-    csv_path: str = "out/us30_h1_macd_dataset.csv"
-    out_dir: str = "train_out"
+    csv_path: str = BASE_DIR / "out/us30_h1_macd_dataset.csv"
+    out_dir: str = BASE_DIR / "train_out"
 
     # Walk-forward split (por tempo)
     train_frac: float = 0.70
@@ -37,7 +37,7 @@ class TrainConfig:
     dropout: float = 0.20
 
     # ONNX
-    onnx_path: str = "train_out/us30_macd_mlp.onnx"
+    onnx_path: str = BASE_DIR / "train_out/us30_macd_mlp.onnx"
 
 
 FEATURE_COLS = (

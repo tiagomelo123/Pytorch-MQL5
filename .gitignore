@@ -2,3 +2,12 @@
 /us30/artifacts_3class
 /out
 /train_out
+/us30/out
+/us30/train_out
+/artifacts_3class
+/us30/__pycache__
+/us30/out
+us30/out/us30_h1_macd_dataset.csv
+us30/out/us30_h1_features.csv
+us30/out/us30_h1_macd_dataset.csv
+us30/out/us30_h1_ohlc.csv

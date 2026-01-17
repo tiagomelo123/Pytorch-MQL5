@@ -3,10 +3,10 @@ import sys
 import time
 import numpy as np
 import pandas as pd
-
+from pathlib import Path
 import MetaTrader5 as mt5
 
-
+BASE_DIR = Path(__file__).resolve().parent
 # =========================================================
 # 1) Indicadores (pandas/numpy puro)
 # =========================================================
@@ -296,11 +296,11 @@ def main():
     ADX_MIN = 20.0
 
     # Saídas
-    out_dir = "out"
+    out_dir = BASE_DIR / "out"
     os.makedirs(out_dir, exist_ok=True)
-    ohlc_csv = os.path.join(out_dir, "us30_h1_ohlc.csv")
-    feat_csv = os.path.join(out_dir, "us30_h1_features.csv")
-    dataset_csv = os.path.join(out_dir, "us30_h1_macd_dataset.csv")
+    ohlc_csv = BASE_DIR / os.path.join(out_dir, "us30_h1_ohlc.csv")
+    feat_csv = BASE_DIR / os.path.join(out_dir, "us30_h1_features.csv")
+    dataset_csv = BASE_DIR / os.path.join(out_dir, "us30_h1_macd_dataset.csv")
 
     # ---------- CONNECT ----------
     mt5_connect()  # assume MT5 aberto/logado
