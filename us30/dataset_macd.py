@@ -18,6 +18,36 @@ def rma(s: pd.Series, period: int) -> pd.Series:
     # Wilder smoothing (RMA)
     return s.ewm(alpha=1/period, adjust=False).mean()
 
+def ema_mt5(series: pd.Series, period: int) -> pd.Series:
+    """
+    EMA com seed por SMA (estilo plataforma MT5).
+    """
+    s = series.astype("float64").values
+    out = np.full_like(s, np.nan, dtype="float64")
+
+    if len(s) < period:
+        return pd.Series(out, index=series.index)
+
+    alpha = 2.0 / (period + 1.0)
+
+    # seed = SMA dos primeiros 'period'
+    seed_idx = period - 1
+    out[seed_idx] = np.nanmean(s[:period])
+
+    for i in range(seed_idx + 1, len(s)):
+        out[i] = out[i - 1] + alpha * (s[i] - out[i - 1])
+
+    return pd.Series(out, index=series.index)
+
+
+def macd_mt5(close: pd.Series, fast=12, slow=26, signal=9):
+    ema_fast = ema_mt5(close, fast)
+    ema_slow = ema_mt5(close, slow)
+    macd_line = ema_fast - ema_slow
+    macd_signal = ema_mt5(macd_line, signal)
+    macd_hist = macd_line - macd_signal
+    return macd_line, macd_signal, macd_hist
+
 def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
     prev_close = close.shift(1)
     tr = pd.concat([
@@ -74,18 +104,20 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         out[f"ret_{k}"] = log_close.diff(k)
 
     out["ret_sum_3"] = out["ret_1"] + out["ret_2"] + out["ret_3"]
-    out["ret_vol_7"] = out[[f"ret_{k}" for k in range(1, 8)]].std(axis=1)
+    out["ret_vol_7"] = out[[f"ret_{k}" for k in range(1, 8)]].std(axis=1, ddof=0)
 
     # EMAs
     out["ema50"] = ema(out["close"], 50)
     out["ema200"] = ema(out["close"], 200)
     out["ema50_slope_5"] = out["ema50"] - out["ema50"].shift(5)
 
-    # MACD
-    macd_line, macd_signal, macd_hist = macd(out["close"], 12, 26, 9)
+    # MACD (MT5-like)
+    macd_line, macd_signal, macd_hist = macd_mt5(out["close"], 12, 26, 9)
+
     out["macd_line"] = macd_line
     out["macd_signal"] = macd_signal
     out["macd_hist"] = macd_hist
+
     out["macd_hist_slope_1"] = out["macd_hist"] - out["macd_hist"].shift(1)
     out["macd_hist_slope_3"] = out["macd_hist"] - out["macd_hist"].shift(3)
 
