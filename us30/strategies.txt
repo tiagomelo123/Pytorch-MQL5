@@ -1,0 +1,3 @@
+- comprar no pullback, verificando probabilidade de continuação
+- somente comprar acima de X probabilidade com número máximo de posições abertas, sl, tp e trailing stop;
+- comprar no breakout, checando a probabilidade de continuação da tendência
