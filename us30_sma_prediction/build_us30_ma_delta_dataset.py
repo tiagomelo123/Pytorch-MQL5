@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 from ta.trend import EMAIndicator, SMAIndicator
 from ta.volatility import AverageTrueRange
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # =========================
 # CONFIG
@@ -14,7 +18,7 @@ HORIZON_H  = 10
 MA_PERIOD  = 50
 ATR_PERIOD = 14
 
-OUT_CSV = "out/us30_h1_ma_delta_h10.csv"
+OUT_CSV = BASE_DIR / "out/us30_h1_ma_delta_h10.csv"
 
 # =========================
 # INIT MT5
@@ -99,6 +103,7 @@ df_out = df[FINAL_COLS]
 # =========================
 # SAVE CSV
 # =========================
+os.makedirs(os.path.dirname(OUT_CSV), exist_ok=True)
 df_out.to_csv(OUT_CSV, index=False)
 print(f"OK: dataset salvo em {OUT_CSV}")
 print("Rows:", len(df_out))

@@ -7,13 +7,16 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # =========================
 # CONFIG
 # =========================
 @dataclass
 class CFG:
-    csv_path: str = "out/us30_h1_ma_delta_h10.csv"
+    csv_path: str = BASE_DIR /  "out/us30_h1_ma_delta_h10.csv"
 
     # columns
     time_col: str = "time"
@@ -39,10 +42,10 @@ class CFG:
     # test_frac = 0.15 (resto)
 
     # outputs
-    out_dir: str = "train_out"
-    scaler_path: str = "train_out/scaler.json"
-    best_pt_path: str = "train_out/cnn1d_best.pt"
-    onnx_path: str = "train_out/us30_h1_cnn1d_ma_delta_h10.onnx"
+    out_dir: str = BASE_DIR / "train_out"
+    scaler_path: str = BASE_DIR /  "train_out/scaler.json"
+    best_pt_path: str = BASE_DIR /  "train_out/cnn1d_best.pt"
+    onnx_path: str = BASE_DIR / "train_out/us30_h1_cnn1d_ma_delta_h10.onnx"
 
 cfg = CFG()
 
