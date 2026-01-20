@@ -30,7 +30,7 @@ class CFG:
     # training
     batch_size: int = 256
     epochs: int = 30
-    lr: float = 1e-3
+    lr: float = 3e-4
     weight_decay: float = 1e-4
     num_workers: int = 0
     seed: int = 42
@@ -174,7 +174,7 @@ def train_loop(model, train_loader, val_loader, device, epochs, lr, weight_decay
     loss_fn = nn.SmoothL1Loss(beta=1.0)  # Huber (SmoothL1)
     best_val = float("inf")
     best_epoch = -1
-    patience = 6
+    patience = 10
     bad = 0
 
     for epoch in range(1, epochs + 1):
@@ -229,12 +229,12 @@ def export_onnx(model, onnx_path, n_features, lookback, device):
         dummy,
         onnx_path,
         input_names=["X"],
-        output_names=["yhat"],
-        dynamic_axes={
-            "X": {0: "batch"},
-            "yhat": {0: "batch"},
-        },
-        opset_version=18
+        output_names=["yhat"],        
+        opset_version=18,
+        dynamic_axes=None,
+        keep_initializers_as_inputs=False,
+        export_params=True,
+        external_data=False
     )
     print(f"OK: ONNX salvo em {onnx_path}")
 
