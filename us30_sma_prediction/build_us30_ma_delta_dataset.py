@@ -82,6 +82,8 @@ df = df.dropna().reset_index(drop=True)
 # =========================
 # COLUNAS FINAIS
 # =========================
+OHLC_COLS = ["open", "high", "low", "close"]
+
 FEATURE_COLS = [
     "ret_1",
     "hl",
@@ -96,7 +98,7 @@ TARGET_COLS = [
     "y_sma_delta_h10"
 ]
 
-FINAL_COLS = ["time"] + FEATURE_COLS + TARGET_COLS
+FINAL_COLS = ["time"] + OHLC_COLS + FEATURE_COLS + TARGET_COLS
 
 df_out = df[FINAL_COLS]
 
