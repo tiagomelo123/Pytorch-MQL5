@@ -20,11 +20,11 @@ ATR_PERIOD = 14
 # SAVE FIG CONFIG
 # =========================
 SAVE_FIG = True
-PLOTS_DIR = Path("plots")
+PLOTS_DIR = BASE_DIR / Path("plots")
 PLOTS_DIR.mkdir(exist_ok=True)
 
 FIG_NAME = f"ema_real_vs_pred_h{H}_ema{EMA_PERIOD}_lb64.png"
-FIG_PATH = PLOTS_DIR / FIG_NAME
+FIG_PATH =   PLOTS_DIR / FIG_NAME
 
 # =========================
 # LOAD
