@@ -24,8 +24,8 @@ class CFG:
     target_col: str = "y_ema_delta_h10"   # 1 alvo (regressão)
 
     # windowing (CNN1D)
-    lookback: int = 64   # N velas
-    horizon: int = 10    # só documental; label já está no CSV
+    lookback: int = 128   # N velas
+    horizon: int = 20    # só documental; label já está no CSV
 
     # training
     batch_size: int = 256

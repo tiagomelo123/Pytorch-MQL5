@@ -5,15 +5,26 @@ from ta.trend import EMAIndicator
 from ta.volatility import AverageTrueRange
 from pathlib import Path
 
+
 # =========================
 # CONFIG
 # =========================
 BASE_DIR = Path(__file__).resolve().parent
 CSV_IN = BASE_DIR / r"out/us30_h1_ma_delta_h10_with_yhat.csv"
 
-H = 10
+H = 20
 EMA_PERIOD = 50
 ATR_PERIOD = 14
+
+# =========================
+# SAVE FIG CONFIG
+# =========================
+SAVE_FIG = True
+PLOTS_DIR = Path("plots")
+PLOTS_DIR.mkdir(exist_ok=True)
+
+FIG_NAME = f"ema_real_vs_pred_h{H}_ema{EMA_PERIOD}_lb64.png"
+FIG_PATH = PLOTS_DIR / FIG_NAME
 
 # =========================
 # LOAD
@@ -59,4 +70,9 @@ plt.title(f"EMA real vs EMA prevista | H={H}, EMA={EMA_PERIOD}, ATR={ATR_PERIOD}
 plt.legend()
 plt.xticks(rotation=30)
 plt.tight_layout()
-plt.show()
+
+if SAVE_FIG:
+    plt.savefig(FIG_PATH, dpi=150)
+    print(f"OK: figura salva em {FIG_PATH}")
+
+plt.show()  # opcional, pode comentar se quiser só salvar

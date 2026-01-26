@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent
 SYMBOL     = "US30"
 TIMEFRAME  = mt5.TIMEFRAME_H1
 N_BARS     = 50000
-HORIZON_H  = 10
+HORIZON_H  = 20
 MA_PERIOD  = 50
 ATR_PERIOD = 14
 

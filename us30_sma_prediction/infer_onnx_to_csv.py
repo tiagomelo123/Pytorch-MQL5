@@ -12,7 +12,7 @@ CSV_IN   = BASE_DIR / r"out/us30_h1_ma_delta_h10.csv"
 ONNX     = BASE_DIR / r"train_out/us30_h1_cnn1d_ma_delta_h10.onnx"
 SCALER   = BASE_DIR / r"train_out/scaler.json"
 
-LOOKBACK = 64
+LOOKBACK = 128
 OUT_CSV  = BASE_DIR / r"out/us30_h1_ma_delta_h10_with_yhat.csv"
 
 # Período (opcional):
