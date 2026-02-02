@@ -5,3 +5,29 @@ Esse EA busca a cada X horas o mínimo e a máximo do preço do EURUSD ou USDJPY
 com prazo de vencimento a ser denifido no grupo de entradas.
 
 Blocos de opções / entrada EA
+* Geral
+  - Amplitude de busca (Ex. 100 Barras)
+
+* Stop Loss e Take Profit
+  - Takeprofit em pontos (Ex. 200)
+  - Stoploss em pontos (Ex. 200)
+  - BuyStop shift
+  - SellStop shift
+
+* Risco
+  - Usar fixo fixo (?)
+  - Lote fixo (Ex. 1.00)
+  - Carga de depósito constante em porcentagem
+
+* Tempo Limite
+  - Tempo de expiração da ordem em horas
+  - Fechar ordens na sexta (?)
+  - Horário de fechanebt i
+
+* Trailing Stop
+  - Ativar TS em X pontos ( Ex. 50) (Trailing stop será ativado após 50 pontos de lucro)
+  - Passo do TS em X pontos (Ex. 10) (Trailing stop irá se mover a cada 10 pontos )
+
+* Outros
+  - Comentário 
+  - Número Mágico
