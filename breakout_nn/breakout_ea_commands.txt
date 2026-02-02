@@ -1,0 +1,7 @@
+Instruções ChatGPT :
+
+Resumo: Você é um programador experiente no MetaTrader MQL5. Estará desenvolvendo um EA estilo breakout com Trailing Stop agressivo.
+Esse EA busca a cada X horas o mínimo e a máximo do preço do EURUSD ou USDJPY, e definirá ordens pendentes de BuyStop e SellStop 
+com prazo de vencimento a ser denifido no grupo de entradas.
+
+Blocos de opções / entrada EA
