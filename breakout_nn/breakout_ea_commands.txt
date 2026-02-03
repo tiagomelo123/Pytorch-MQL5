@@ -4,9 +4,18 @@ Resumo: Você é um programador experiente no MetaTrader MQL5. Estará desenvolv
 Esse EA busca a cada X horas o mínimo e a máximo do preço do EURUSD ou USDJPY, e definirá ordens pendentes de BuyStop e SellStop 
 com prazo de vencimento a ser denifido no grupo de entradas.
 
+O preço mínimo e máximo poderá ser buscada a cada nova barra. 
+
+Caso salvar em arquivo esteja habilitado, deverá ser criada uma basta em MQL5/Files com o nome do EA e nome do ativo negociado (Ex. EURUSD | USDJPY). As negociações poderão ser salvas assim: ativo, tipo de entrada (buy | sell) data entrada, preço do buy stop / sell stop, preço real de entrada, slippage calculado, spread no momento da abertura.
+
 Blocos de opções / entrada EA
 * Geral
-  - Amplitude de busca (Ex. 100 Barras)
+  - Amplitude de busca (Ex. 100 Barras
+  - Comentário 
+  - Número Mágico
+  - Spread máximo permitido
+  - Abrir ordem somente em barra nova (?)
+  - Um cancela o outro pedido ((se true: mantém só uma ordem por último high/low; se false: pode acumular até expirar/executar)
 
 * Stop Loss e Take Profit
   - Takeprofit em pontos (Ex. 200)
@@ -22,12 +31,12 @@ Blocos de opções / entrada EA
 * Tempo Limite
   - Tempo de expiração da ordem em horas
   - Fechar ordens na sexta (?)
-  - Horário de fechanebt i
+  - Horário (GTM) de fechamento da ordem aberta na sexta feira
 
 * Trailing Stop
   - Ativar TS em X pontos ( Ex. 50) (Trailing stop será ativado após 50 pontos de lucro)
   - Passo do TS em X pontos (Ex. 10) (Trailing stop irá se mover a cada 10 pontos )
 
-* Outros
-  - Comentário 
-  - Número Mágico
+* Exportar CSV
+  - Salvar trades em arquivo CSV (?)
+  - nome do arquivo
