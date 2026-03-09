@@ -16,7 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent
 # =========================
 @dataclass
 class CFG:
-    csv_path: str = BASE_DIR /  "out/us30_h1_ma_delta_h10.csv"
+    horizon: int = 30    # só documental; label já está no CSV
+    csv_path: str = BASE_DIR /  f"out/eurusd_h1_ma_delta_h{horizon}.csv"
 
     # columns
     time_col: str = "time"
@@ -25,8 +26,7 @@ class CFG:
 
     # windowing (CNN1D)
     lookback: int = 128   # N velas
-    horizon: int = 20    # só documental; label já está no CSV
-
+    
     # training
     batch_size: int = 256
     epochs: int = 30
@@ -45,7 +45,7 @@ class CFG:
     out_dir: str = BASE_DIR / "train_out"
     scaler_path: str = BASE_DIR /  "train_out/scaler.json"
     best_pt_path: str = BASE_DIR /  "train_out/cnn1d_best.pt"
-    onnx_path: str = BASE_DIR / "train_out/us30_h1_cnn1d_ma_delta_h10.onnx"
+    onnx_path: str = BASE_DIR / f"train_out/eurusd_h1_cnn1d_ma_delta_h{horizon}.onnx"
 
 cfg = CFG()
 

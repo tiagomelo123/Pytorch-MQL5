@@ -7,18 +7,19 @@ from pathlib import Path
 # =========================
 # CONFIG
 # =========================
-BASE_DIR = Path(__file__).resolve().parent
-CSV_IN   = BASE_DIR / r"out/us30_h1_ma_delta_h10.csv"
-ONNX     = BASE_DIR / r"train_out/us30_h1_cnn1d_ma_delta_h10.onnx"
-SCALER   = BASE_DIR / r"train_out/scaler.json"
+HORIZON     = 30
+BASE_DIR    = Path(__file__).resolve().parent
+CSV_IN      = BASE_DIR / f"out/eurusd_h1_ma_delta_h{HORIZON}.csv"
+ONNX        = BASE_DIR / f"train_out/eurusd_h1_cnn1d_ma_delta_h{HORIZON}.onnx"
+SCALER      = BASE_DIR / r"train_out/scaler.json"
 
-LOOKBACK = 128
-OUT_CSV  = BASE_DIR / r"out/us30_h1_ma_delta_h10_with_yhat.csv"
+LOOKBACK    = 128
+OUT_CSV     = BASE_DIR / f"out/eurusd_h1_ma_delta_h{HORIZON}_with_yhat.csv"
 
 # Período (opcional):
 # - por data: use START/END
 # - por índice: USE_INDEX_SLICE=True
-START = "2024-06-01"
+START = "2024-02-01"
 END   = "2024-08-01"
 
 USE_INDEX_SLICE = False

@@ -10,9 +10,10 @@ from pathlib import Path
 # CONFIG
 # =========================
 BASE_DIR = Path(__file__).resolve().parent
-CSV_IN = BASE_DIR / r"out/us30_h1_ma_delta_h10_with_yhat.csv"
+H = 30
+CSV_IN = BASE_DIR / f"out/eurusd_h1_ma_delta_h{H}_with_yhat.csv"
+SYMBOL = "eurusd"
 
-H = 20
 EMA_PERIOD = 50
 ATR_PERIOD = 14
 
@@ -23,7 +24,7 @@ SAVE_FIG = True
 PLOTS_DIR = BASE_DIR / Path("plots")
 PLOTS_DIR.mkdir(exist_ok=True)
 
-FIG_NAME = f"ema_real_vs_pred_h{H}_ema{EMA_PERIOD}_lb64.png"
+FIG_NAME = f"{SYMBOL}_ema_real_vs_pred_h{H}_ema{EMA_PERIOD}_lb64.png"
 FIG_PATH =   PLOTS_DIR / FIG_NAME
 
 # =========================

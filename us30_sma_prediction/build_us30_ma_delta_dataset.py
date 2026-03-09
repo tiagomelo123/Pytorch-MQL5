@@ -11,14 +11,14 @@ BASE_DIR = Path(__file__).resolve().parent
 # =========================
 # CONFIG
 # =========================
-SYMBOL     = "US30"
+SYMBOL     = "EURUSD"
 TIMEFRAME  = mt5.TIMEFRAME_H1
 N_BARS     = 50000
-HORIZON_H  = 20
+HORIZON_H  = 30
 MA_PERIOD  = 50
 ATR_PERIOD = 14
 
-OUT_CSV = BASE_DIR / "out/us30_h1_ma_delta_h10.csv"
+OUT_CSV = BASE_DIR / f"out/eurusd_h1_ma_delta_h{HORIZON_H}.csv"
 
 # =========================
 # INIT MT5
