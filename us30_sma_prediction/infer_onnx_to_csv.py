@@ -7,7 +7,7 @@ from pathlib import Path
 # =========================
 # CONFIG
 # =========================
-HORIZON     = 30
+HORIZON     = 10
 BASE_DIR    = Path(__file__).resolve().parent
 CSV_IN      = BASE_DIR / f"out/eurusd_h1_ma_delta_h{HORIZON}.csv"
 ONNX        = BASE_DIR / f"train_out/eurusd_h1_cnn1d_ma_delta_h{HORIZON}.onnx"

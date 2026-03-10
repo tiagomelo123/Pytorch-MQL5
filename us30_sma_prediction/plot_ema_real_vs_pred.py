@@ -10,11 +10,11 @@ from pathlib import Path
 # CONFIG
 # =========================
 BASE_DIR = Path(__file__).resolve().parent
-H = 30
+H = 10
 CSV_IN = BASE_DIR / f"out/eurusd_h1_ma_delta_h{H}_with_yhat.csv"
 SYMBOL = "eurusd"
 
-EMA_PERIOD = 50
+EMA_PERIOD = 100
 ATR_PERIOD = 14
 
 # =========================

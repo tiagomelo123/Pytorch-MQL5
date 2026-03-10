@@ -14,8 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent
 SYMBOL     = "EURUSD"
 TIMEFRAME  = mt5.TIMEFRAME_H1
 N_BARS     = 50000
-HORIZON_H  = 30
-MA_PERIOD  = 50
+HORIZON_H  = 10
+MA_PERIOD  = 100
 ATR_PERIOD = 14
 
 OUT_CSV = BASE_DIR / f"out/eurusd_h1_ma_delta_h{HORIZON_H}.csv"

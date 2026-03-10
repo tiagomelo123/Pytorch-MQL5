@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # =========================
 @dataclass
 class CFG:
-    horizon: int = 30    # só documental; label já está no CSV
+    horizon: int = 10    # só documental; label já está no CSV
     csv_path: str = BASE_DIR /  f"out/eurusd_h1_ma_delta_h{horizon}.csv"
 
     # columns
