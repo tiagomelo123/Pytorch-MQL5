@@ -26,7 +26,7 @@ METADATA_PATH = "mean_reversion_metadata.json"
 
 THRESHOLD = 0.60
 BATCH_SIZE = 32
-EPOCHS = 120
+EPOCHS = 80
 LR = 0.001
 
 
@@ -107,15 +107,15 @@ class MeanReversionNN(nn.Module):
         super().__init__()
 
         self.net = nn.Sequential(
-            nn.Linear(input_size, 32),
+            nn.Linear(input_size, 16),
             nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Dropout(0.35),
 
-            nn.Linear(32, 16),
+            nn.Linear(16, 8),
             nn.ReLU(),
-            nn.Dropout(0.15),
+            nn.Dropout(0.20),
 
-            nn.Linear(16, 1)
+            nn.Linear(8, 1)
         )
 
     def forward(self, x):
@@ -188,6 +188,29 @@ for threshold in [0.50, 0.55, 0.60, 0.65, 0.70]:
 
 
 # =========================
+# 8.1 Avaliação por faixas de probabilidade
+# =========================
+
+analysis = pd.DataFrame({
+    "prob": probs,
+    "label": y_test
+})
+
+bins = [0.0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+analysis["prob_bin"] = pd.cut(analysis["prob"], bins=bins)
+
+rank_report = analysis.groupby("prob_bin").agg(
+    total=("label", "count"),
+    winners=("label", "sum"),
+    win_rate=("label", "mean"),
+    avg_prob=("prob", "mean")
+)
+
+print("\nAvaliação por faixa de probabilidade:")
+print(rank_report)
+
+
+# =========================
 # 9. Resultado final
 # =========================
 
@@ -199,6 +222,26 @@ result["prediction"] = final_preds
 
 print("\nÚltimos sinais:")
 print(result[["time", "direction", "label", "prob_success", "prediction"]].tail(20))
+
+# =========================
+# 8.2 Salvar erros para análise
+# =========================
+
+errors = result[result["label"] != result["prediction"]].copy()
+errors.to_csv("mean_reversion_errors.csv", index=False)
+
+high_confidence_errors = result[
+    (result["label"] == 0) &
+    (result["prob_success"] >= THRESHOLD)
+].copy()
+
+high_confidence_errors.to_csv(
+    "mean_reversion_high_confidence_errors.csv",
+    index=False
+)
+
+print("\nErros salvos em mean_reversion_errors.csv")
+print("Erros de alta confiança salvos em mean_reversion_high_confidence_errors.csv")
 
 
 # =========================
