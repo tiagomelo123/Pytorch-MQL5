@@ -11,7 +11,7 @@ from datetime import datetime
 
 SYMBOL = "EURUSD"
 TIMEFRAME = mt5.TIMEFRAME_H1
-START_DATE = datetime(2024, 1, 1)
+START_DATE = datetime(2025, 1, 1)
 END_DATE   = datetime(2026, 4, 28)
 
 BB_PERIOD = 20
@@ -197,6 +197,14 @@ def create_features(df):
     df["hour"] = df["time"].dt.hour
     df["day_of_week"] = df["time"].dt.dayofweek
 
+   
+
+    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+
+    df["dow_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
+    df["dow_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7)
+
     df = add_daily_pivots(df)
     df = add_fractals(df)
 
@@ -213,6 +221,43 @@ def create_features(df):
 
     return df
 
+def add_directional_features(df):
+    df["trend_strength"] = df["adx14"] * df["range_atr"]
+    df["impulse_strength"] = df["body_atr"] * df["range_atr"]
+
+    df["ema_slope_agreement"] = (
+        np.sign(df["ema20_slope"]) * np.sign(df["ema50_slope"])
+    )
+
+    df["bb_touch_direction"] = (
+        ((df["direction"] == -1) & (df["touch_bb_upper"] == 1)) |
+        ((df["direction"] == 1) & (df["touch_bb_lower"] == 1))
+    ).astype(int)
+
+    df["outside_bb_direction"] = (
+        ((df["direction"] == -1) & (df["close_outside_upper"] == 1)) |
+        ((df["direction"] == 1) & (df["close_outside_lower"] == 1))
+    ).astype(int)
+
+    df["wick_reversal_direction"] = np.where(
+        df["direction"] == 1,
+        df["lower_wick_ratio"],
+        df["upper_wick_ratio"]
+    )
+
+    df["rsi_reversal_strength"] = np.where(
+        df["direction"] == 1,
+        np.maximum(30 - df["rsi14"], 0),
+        np.maximum(df["rsi14"] - 70, 0)
+    )
+
+    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+
+    df["dow_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
+    df["dow_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7)
+
+    return df
 
 # =========================
 # LABELS
@@ -318,6 +363,8 @@ def main():
     # Mantém somente setups reais
     df = df[df["direction"] != 0]
 
+    df = add_directional_features(df)
+
     feature_cols = [
         "open", "high", "low", "close", "tick_volume",
         "ema20", "ema50",
@@ -356,7 +403,18 @@ def main():
         "dist_fractal_high_atr",
         "dist_fractal_low_atr",
         "direction",
-        "label"
+        "label",
+        "trend_strength",
+        "impulse_strength",
+        "ema_slope_agreement",
+        "bb_touch_direction",
+        "outside_bb_direction",
+        "wick_reversal_direction",
+        "rsi_reversal_strength",
+        "hour_sin",
+        "hour_cos",
+        "dow_sin",
+        "dow_cos",
     ]
 
     df_final = df[["time"] + feature_cols]

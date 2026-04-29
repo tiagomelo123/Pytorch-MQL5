@@ -13,3 +13,7 @@ us30/out/us30_h1_macd_dataset.csv
 us30/out/us30_h1_ohlc.csv
 /us30_sma_prediction/out
 /us30_sma_prediction/train_out
+*.csv
+*.csv
+*.csv
+mean_reversal/mean_reversion_dataset.csv
