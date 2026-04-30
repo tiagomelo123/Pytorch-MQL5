@@ -295,7 +295,8 @@ torch.onnx.export(
         "input": {0: "batch_size"},
         "logit": {0: "batch_size"}
     },
-    opset_version=17
+    opset_version=18,
+     dynamo=False
 )
 
 print("Modelo ONNX salvo em:", MODEL_ONNX_PATH)

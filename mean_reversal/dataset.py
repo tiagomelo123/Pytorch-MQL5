@@ -23,8 +23,14 @@ RSI_PERIOD = 14
 
 PIVOT_BUFFER_ATR = 0.30
 
-LOOKAHEAD_BARS = 20
+# =========================
+# CONFIGURAÇÕES NOVAS
+# =========================
+
+TP_ATR_MULT = 1.0
 SL_ATR_MULT = 0.8
+SL_STRUCTURE_BUFFER_ATR = 0.20
+LOOKAHEAD_BARS = 20
 
 OUTPUT_FILE = "mean_reversion_dataset.csv"
 
@@ -257,6 +263,35 @@ def add_directional_features(df):
     df["dow_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
     df["dow_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7)
 
+    # Confluência com pivôs na direção da reversão
+    df["near_resistance_direction"] = (
+        (df["direction"] == -1) &
+        ((df["near_r1"] == 1) | (df["near_r2"] == 1))
+    ).astype(int)
+
+    df["near_support_direction"] = (
+        (df["direction"] == 1) &
+        ((df["near_s1"] == 1) | (df["near_s2"] == 1))
+    ).astype(int)
+
+    # Distância ao nível de pivot mais favorável para a reversão
+    df["dist_reversal_pivot_atr"] = np.where(
+        df["direction"] == -1,
+        np.minimum(df["dist_r1_atr"].abs(), df["dist_r2_atr"].abs()),
+        np.minimum(df["dist_s1_atr"].abs(), df["dist_s2_atr"].abs())
+    )
+
+    # Fractal favorável na direção da reversão
+    df["dist_reversal_fractal_atr"] = np.where(
+        df["direction"] == -1,
+        df["dist_fractal_high_atr"].abs(),
+        df["dist_fractal_low_atr"].abs()
+    )
+
+    # Distância da entrada até o stop/target em pontos de preço
+    df["tp_distance_price"] = abs(df["tp_price"] - df["close"])
+    df["sl_distance_price"] = abs(df["sl_price"] - df["close"])
+
     return df
 
 # =========================
@@ -266,32 +301,57 @@ def add_directional_features(df):
 def create_labels(df):
     labels = []
     directions = []
+    tp_prices = []
+    sl_prices = []
 
     for i in range(len(df)):
         row = df.iloc[i]
 
         label = np.nan
         direction = 0
+        tp = np.nan
+        sl = np.nan
 
-        if np.isnan(row["atr14"]) or np.isnan(row["ema20"]):
+        if (
+            np.isnan(row["atr14"]) or
+            np.isnan(row["bb_upper"]) or
+            np.isnan(row["bb_lower"])
+        ):
             labels.append(label)
             directions.append(direction)
+            tp_prices.append(tp)
+            sl_prices.append(sl)
             continue
 
         entry = row["close"]
-        tp = row["ema20"]
-
+        atr_value = row["atr14"]
         future = df.iloc[i + 1:i + 1 + LOOKAHEAD_BARS]
 
         if len(future) < LOOKAHEAD_BARS:
             labels.append(label)
             directions.append(direction)
+            tp_prices.append(tp)
+            sl_prices.append(sl)
             continue
 
-        # Venda: preço esticado para cima
+        # =========================
+        # VENDA: preço esticado para cima
+        # =========================
         if row["close"] > row["bb_upper"]:
             direction = -1
-            sl = entry + SL_ATR_MULT * row["atr14"]
+
+            # TP por ATR
+            tp = entry - (TP_ATR_MULT * atr_value)
+
+            # SL estrutural:
+            # usa fractal high se existir; caso contrário usa SL ATR
+            sl_atr = entry + (SL_ATR_MULT * atr_value)
+
+            if not np.isnan(row.get("last_fractal_high", np.nan)):
+                sl_structure = row["last_fractal_high"] + (SL_STRUCTURE_BUFFER_ATR * atr_value)
+                sl = max(sl_atr, sl_structure)
+            else:
+                sl = sl_atr
 
             for _, f in future.iterrows():
                 if f["high"] >= sl:
@@ -301,10 +361,24 @@ def create_labels(df):
                     label = 1
                     break
 
-        # Compra: preço esticado para baixo
+        # =========================
+        # COMPRA: preço esticado para baixo
+        # =========================
         elif row["close"] < row["bb_lower"]:
             direction = 1
-            sl = entry - SL_ATR_MULT * row["atr14"]
+
+            # TP por ATR
+            tp = entry + (TP_ATR_MULT * atr_value)
+
+            # SL estrutural:
+            # usa fractal low se existir; caso contrário usa SL ATR
+            sl_atr = entry - (SL_ATR_MULT * atr_value)
+
+            if not np.isnan(row.get("last_fractal_low", np.nan)):
+                sl_structure = row["last_fractal_low"] - (SL_STRUCTURE_BUFFER_ATR * atr_value)
+                sl = min(sl_atr, sl_structure)
+            else:
+                sl = sl_atr
 
             for _, f in future.iterrows():
                 if f["low"] <= sl:
@@ -316,9 +390,17 @@ def create_labels(df):
 
         labels.append(label)
         directions.append(direction)
+        tp_prices.append(tp)
+        sl_prices.append(sl)
 
     df["direction"] = directions
+    df["tp_price"] = tp_prices
+    df["sl_price"] = sl_prices
     df["label"] = labels
+
+    df["tp_dist_atr"] = abs(df["tp_price"] - df["close"]) / df["atr14"]
+    df["sl_dist_atr"] = abs(df["sl_price"] - df["close"]) / df["atr14"]
+    df["rr"] = df["tp_dist_atr"] / df["sl_dist_atr"]
 
     return df
 
@@ -415,6 +497,15 @@ def main():
         "hour_cos",
         "dow_sin",
         "dow_cos",
+        "near_resistance_direction",
+        "near_support_direction",
+        "dist_reversal_pivot_atr",
+        "dist_reversal_fractal_atr",
+        "tp_distance_price",
+        "sl_distance_price",
+        "tp_dist_atr",
+        "sl_dist_atr",
+        "rr",
     ]
 
     df_final = df[["time"] + feature_cols]
