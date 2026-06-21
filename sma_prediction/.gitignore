@@ -1,0 +1,19 @@
+# Artefatos gerados pelo pipeline (modelos, scalers, datasets, gráficos)
+artifacts/*
+!artifacts/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
