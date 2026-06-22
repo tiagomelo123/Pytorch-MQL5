@@ -41,7 +41,8 @@ ma_forecast/
 ├── diagnostics/
 │   └── plots.py               # TODOS os gráficos do pipeline
 ├── predict/
-│   └── inference.py           # inferência com modelo treinado
+│   ├── inference.py           # inferência com modelo treinado
+│   └── mt5_simulation.py      # simula inferência ONNX como o EA MQL5 fará
 ├── export/
 │   └── onnx_export.py         # exporta modelo treinado para ONNX
 ├── pipeline/
@@ -102,14 +103,15 @@ Este é o coração do sistema. Executa as etapas em sequência, com logging cla
 ### Etapas em ordem
 
 ```
-[ETAPA 1/8] Conectando ao MT5 e coletando dados...
-[ETAPA 2/8] Calculando features e salvando dataset...
-[ETAPA 3/8] Criando janelas deslizantes e splits...
-[ETAPA 4/8] Treinando modelo...
-[ETAPA 5/8] Avaliando no conjunto de teste...
-[ETAPA 6/8] Exportando modelo para ONNX...
-[ETAPA 7/8] Gerando gráficos de diagnóstico...
-[ETAPA 8/8] Gerando gráfico de comparação com preço real...
+[ETAPA 1/9] Conectando ao MT5 e coletando dados...
+[ETAPA 2/9] Calculando features e salvando dataset...
+[ETAPA 3/9] Criando janelas deslizantes e splits...
+[ETAPA 4/9] Treinando modelo...
+[ETAPA 5/9] Avaliando no conjunto de teste...
+[ETAPA 6/9] Exportando modelo para ONNX...
+[ETAPA 7/9] Gerando gráficos de diagnóstico...
+[ETAPA 8/9] Gerando gráfico de comparação com preço real...
+[ETAPA 9/9] Simulando inferência MT5 com ONNX Runtime...
 ✅ Pipeline concluído. Artefatos salvos em: artifacts/EURUSD_H1_MA20_F5/
 ```
 
@@ -138,7 +140,8 @@ plots/
   ├── 05_predictions_test.png       # MA real vs prevista no test set
   ├── 06_error_distribution.png     # histograma dos erros
   ├── 07_directional_accuracy.png   # acurácia direcional por horizonte
-  └── 08_backtest_overlay.png       # previsão da NN sobreposta ao gráfico real
+  ├── 08_backtest_overlay.png       # previsão da NN sobreposta ao gráfico real
+  └── 09_mt5_simulation.png         # simulação de inferência ONNX como no MT5
 ```
 
 ---
@@ -647,11 +650,150 @@ Período: 2024-09-05 a 2025-06-01 | MAE: 6.1 pips | Dir. Acc: 58.2%
 
 
 
+## predict/mt5_simulation.py — Simulação de Inferência como no MT5
+
+Esta etapa replica **exatamente** o fluxo que o EA em MQL5 executará em produção: coleta as últimas barras disponíveis do MT5, monta o vetor de features da mesma forma que o EA fará, normaliza com os parâmetros do `onnx_metadata.json` (sem usar o `.pkl`), e roda o `model.onnx` via ONNX Runtime. É a validação final de ponta a ponta antes de portar o modelo para o MT5.
+
+### Por que esta etapa é crítica
+
+O backtesting do Plot 08 usa o scaler `.pkl` do scikit-learn e dados do conjunto de teste (histórico). Esta etapa usa o `onnx_metadata.json` e dados **ao vivo recém-coletados do MT5** — simulando exatamente o que o EA fará a cada nova barra. Se os resultados divergirem, há um bug na normalização ou na ordem das features.
+
+### Função principal
+
+```python
+def run_mt5_simulation(run_dir: str, n_recent_bars: int = 300) -> dict:
+    """
+    Simula a inferência ONNX exatamente como o EA MQL5 fará em produção.
+    Coleta barras recentes do MT5, aplica normalização via onnx_metadata.json,
+    roda o modelo ONNX e retorna previsões + gráfico comparativo.
+    """
+```
+
+### Fluxo interno passo a passo
+
+**Passo 1 — Carregar metadados (sem usar .pkl)**
+```python
+with open(f"{run_dir}/onnx_metadata.json") as f:
+    meta = json.load(f)
+
+feature_order  = meta["feature_order"]   # lista com a ordem exata das features
+scaler_min     = np.array(meta["scaler_min"])
+scaler_max     = np.array(meta["scaler_max"])
+lookback       = meta["lookback_window"]
+ma_period      = meta["ma_period"]
+forecast_steps = meta["forecast_steps"]
+```
+
+**Passo 2 — Coletar barras recentes do MT5**
+
+Coletar `n_recent_bars + ma_period + 14 + 1` barras fechadas para ter margem suficiente para calcular todas as features. Remover barra atual (em andamento). Remover barras com volume zero.
+
+**Passo 3 — Calcular features com numpy/pandas puro**
+
+Aplicar exatamente as mesmas fórmulas de `data/features.py`, na mesma ordem de `feature_order`. Esta é a replicação do pré-processamento que o EA fará em MQL5.
+
+```python
+# Montar array de features na ordem correta
+X_raw = df[feature_order].values  # shape: (n_barras, num_features)
+
+# Usar apenas as últimas (lookback) barras
+X_window = X_raw[-lookback:]      # shape: (lookback, num_features)
+```
+
+**Passo 4 — Normalizar com scaler_min/scaler_max do metadata**
+
+```python
+# MinMax manual — replica o que o EA fará em MQL5
+X_norm = (X_window - scaler_min) / (scaler_max - scaler_min + 1e-8)
+X_input = X_norm.astype(np.float32).reshape(1, lookback, len(feature_order))
+```
+
+**Passo 5 — Rodar ONNX Runtime**
+
+```python
+session = ort.InferenceSession(f"{run_dir}/model.onnx")
+y_pred_delta = session.run(["ma_delta"], {"features": X_input})[0][0][0]
+```
+
+**Passo 6 — Desnormalizar para preço**
+
+```python
+ma_atual  = df["ma"].iloc[-1]
+atr_atual = df["atr"].iloc[-1]
+ma_prevista = ma_atual + (y_pred_delta * atr_atual)
+direction   = "UP" if y_pred_delta > 0 else "DOWN"
+```
+
+**Passo 7 — Retornar resultado**
+
+```python
+{
+    "symbol":         meta["symbol"],
+    "timeframe":      meta["timeframe"],
+    "ma_period":      ma_period,
+    "forecast_steps": forecast_steps,
+    "last_bar_time":  str(df["time"].iloc[-1]),
+    "current_close":  float(df["close"].iloc[-1]),
+    "current_ma":     float(ma_atual),
+    "current_atr":    float(atr_atual),
+    "y_pred_delta":   float(y_pred_delta),
+    "ma_forecast":    float(ma_prevista),
+    "direction":      direction,
+    "generated_at":   datetime.utcnow().isoformat()
+}
+```
+
+### Plot 09 — Simulação MT5 (`09_mt5_simulation.png`)
+
+**O que mostra:** o ponto exato onde o modelo está "olhando" e para onde ele está prevendo a MA.
+
+**Layout:** figura única com foco nas últimas `n_recent_bars` barras.
+
+- Linha de close (cinza claro)
+- MA real das últimas barras (azul sólido)
+- Marcador vertical pontilhado na última barra conhecida (linha verde `"agora"`)
+- Ponto único à direita: `ma_forecast` para `+FORECAST_STEPS` barras (estrela laranja)
+- Seta anotada entre `ma_atual` e `ma_forecast` mostrando o delta em pips e a direção
+- Caixa de texto no canto com o resultado completo:
+```
+┌─────────────────────────────┐
+│ ONNX Simulation — EURUSD H1 │
+│ Barra atual : 2025-06-01 14h│
+│ MA atual    : 1.08234       │
+│ MA prevista : 1.08291 (+5b) │
+│ Delta       : +5.7 pips ↑   │
+│ Direção     : UP            │
+│ ATR atual   : 0.00087       │
+└─────────────────────────────┘
+```
+
+- Título: `"Simulação de Inferência ONNX — como o EA MQL5 verá este modelo"`
+
+### Log esperado no terminal
+
+```
+[ETAPA 9/9] Simulando inferência MT5 com ONNX Runtime...
+  📊 Barras coletadas   : 314 (últimas barras ao vivo)
+  🕐 Última barra       : 2025-06-01 14:00:00
+  📈 Close atual        : 1.08198
+  〰  MA atual (SMA 20)  : 1.08234
+  ⚡ ATR atual          : 0.00087
+  🔮 y_pred (delta/ATR) : +0.0657
+  🎯 MA prevista (+5b)  : 1.08291
+  📐 Variação           : +5.7 pips ↑ UP
+  ✅ 09_mt5_simulation.png
+```
+
+---
+
+## predict/inference.py
+
 ```python
 def predict_next(run_dir: str) -> dict:
     """
     Carrega modelo e scaler do run_dir, coleta dados recentes do MT5,
     e retorna previsão das próximas FORECAST_STEPS barras da MA.
+    Usa ONNX Runtime para inferência (mesmo engine que o MT5).
     """
 ```
 
@@ -683,7 +825,7 @@ def predict_next(run_dir: str) -> dict:
 
 ```bash
 python main.py [--symbol STR] [--timeframe STR] [--ma-period INT]
-               [--forecast-steps INT] [--bars INT] [--mode STR]
+               [--forecast-steps INT] [--bars INT] [--retrain]
 ```
 
 | Argumento | Padrão | Descrição |
@@ -693,32 +835,102 @@ python main.py [--symbol STR] [--timeframe STR] [--ma-period INT]
 | `--ma-period` | `20` | Período da SMA |
 | `--forecast-steps` | `5` | Horizonte de previsão |
 | `--bars` | `5000` | Barras históricas |
-| `--mode` | `train` | `train` ou `predict` |
+| `--retrain` | `False` | Força novo treino mesmo se modelo existir (flag, sem valor) |
 
-### Fluxo `--mode train`
+### Lógica de detecção de modelo existente
+
+Ao iniciar, o runner verifica se o `run_dir` correspondente já possui os três artefatos obrigatórios:
+
+```python
+model_exists = all([
+    os.path.exists(f"{run_dir}/model.onnx"),
+    os.path.exists(f"{run_dir}/onnx_metadata.json"),
+    os.path.exists(f"{run_dir}/scaler.pkl"),
+])
+```
+
+**Se modelo não existe:** executa o pipeline completo (etapas 1 a 9).
+
+**Se modelo existe e `--retrain` não foi passado:** exibe resumo do modelo salvo e pergunta interativamente:
 
 ```
 ============================================================
   MA FORECAST PIPELINE
-  EURUSD | H1 | SMA 20 | Forecast +5 barras
-  Run dir: artifacts/EURUSD_H1_MA20_F5/
+  EURUSD | H4 | SMA 20 | Forecast +5 barras
 ============================================================
 
-[ETAPA 1/8] Conectando ao MT5 e coletando dados...
+⚠️  Modelo já treinado encontrado em: artifacts/EURUSD_H4_MA20_F5/
+   Treinado em : 2025-05-30 11:42:18
+   MAE test    : 3.02 pips
+   Dir. Acc    : 90.3%
+   ONNX        : model.onnx (287 KB)
+
+   O que deseja fazer?
+   [1] Usar modelo existente → gerar apenas inferência e gráficos
+   [2] Treinar novamente     → substituir modelo atual
+   [3] Cancelar
+
+Escolha (1/2/3): _
+```
+
+**Se usuário escolhe 1:** pula etapas 1 a 8, executa apenas a etapa 9 (simulação MT5) e gera o `09_mt5_simulation.png` atualizado com dados ao vivo.
+
+**Se usuário escolhe 2:** executa pipeline completo, sobrescrevendo artefatos anteriores.
+
+**Se usuário escolhe 3:** encerra sem fazer nada.
+
+**Se modelo existe e `--retrain` foi passado:** pula o prompt e vai direto para o pipeline completo, sobrescrevendo tudo. Útil para automação e scripts.
+
+```bash
+# Retreinar sem prompt
+python main.py --symbol EURUSD --timeframe H4 --ma-period 20 --forecast-steps 5 --retrain
+```
+
+### Fluxo quando modelo existe e usuário escolhe opção 1
+
+```
+============================================================
+  MA FORECAST PIPELINE
+  EURUSD | H4 | SMA 20 | Forecast +5 barras
+  Run dir: artifacts/EURUSD_H4_MA20_F5/
+============================================================
+
+✅ Modelo existente carregado (treinado em 2025-05-30 11:42:18)
+⏭  Pulando etapas 1 a 8 — executando apenas inferência ao vivo
+
+[ETAPA 9/9] Simulando inferência MT5 com ONNX Runtime...
+  📊 Barras coletadas   : 314 (últimas barras ao vivo)
+  🕐 Última barra       : 2025-06-22 14:00:00
+  📈 Close atual        : 1.08198
+  〰  MA atual (SMA 20)  : 1.08234
+  ⚡ ATR atual          : 0.00087
+  🔮 y_pred (delta/ATR) : +0.0657
+  🎯 MA prevista (+5b)  : 1.08291
+  📐 Variação           : +5.7 pips ↑ UP
+  ✅ 09_mt5_simulation.png
+
+============================================================
+  ✅ INFERÊNCIA CONCLUÍDA
+  Tempo total: 8s
+  Artefatos: artifacts/EURUSD_H4_MA20_F5/plots/09_mt5_simulation.png
+============================================================
+```
+
+### Fluxo pipeline completo (modelo novo ou `--retrain`)
   ✅ 4987 barras válidas coletadas (2021-03-15 a 2025-06-01)
   💾 Salvo: artifacts/EURUSD_H1_MA20_F5/dataset_raw.csv
 
-[ETAPA 2/8] Calculando features...
+[ETAPA 2/9] Calculando features...
   ✅ 11 features calculadas | target: delta | 4937 linhas válidas
   💾 Salvo: artifacts/EURUSD_H1_MA20_F5/dataset_features.csv
 
-[ETAPA 3/8] Criando janelas e splits...
+[ETAPA 3/9] Criando janelas e splits...
   ✅ Janelas: 4891 total
      Treino : 3423 janelas (2021-03-15 a 2024-01-10)
      Val    :  734 janelas (2024-01-10 a 2024-09-05)
      Test   :  734 janelas (2024-09-05 a 2025-06-01)
 
-[ETAPA 4/8] Treinando modelo (device: cuda)...
+[ETAPA 4/9] Treinando modelo (device: cuda)...
   [Época   1/100] train=0.001823 | val=0.001941 | lr=0.001000
   [Época   5/100] train=0.000891 | val=0.000934 | lr=0.001000 🔥
   ...
@@ -726,20 +938,20 @@ python main.py [--symbol STR] [--timeframe STR] [--ma-period INT]
   ⏹  Early stopping na época 47 (melhor: época 32)
   💾 Salvo: artifacts/EURUSD_H1_MA20_F5/model.pt
 
-[ETAPA 5/8] Avaliando no test set...
+[ETAPA 5/9] Avaliando no test set...
   MAE global     : 6.1 pips
   RMSE global    : 8.3 pips
   Dir. Accuracy  : 58.2%
   💾 Salvo: artifacts/EURUSD_H1_MA20_F5/metrics_test.json
 
-[ETAPA 6/8] Exportando modelo para ONNX...
+[ETAPA 6/9] Exportando modelo para ONNX...
   📐 Input shape : (1, 60, 11)
   📐 Output shape: (1, 1)
   ✅ Exportado  : artifacts/EURUSD_H1_MA20_F5/model.onnx
   ✅ Validado   : divergência máxima PyTorch↔ONNX = 3.21e-07
   💾 Metadados  : artifacts/EURUSD_H1_MA20_F5/onnx_metadata.json
 
-[ETAPA 7/8] Gerando gráficos de diagnóstico...
+[ETAPA 7/9] Gerando gráficos de diagnóstico...
   ✅ 01_raw_price.png
   ✅ 02_features.png
   ✅ 03_dataset_split.png
@@ -748,25 +960,27 @@ python main.py [--symbol STR] [--timeframe STR] [--ma-period INT]
   ✅ 06_error_distribution.png
   ✅ 07_directional_accuracy.png
 
-[ETAPA 8/8] Gerando backtest overlay...
+[ETAPA 8/9] Gerando backtest overlay...
   ✅ 08_backtest_overlay.png (últimas 200 barras do test set)
+
+[ETAPA 9/9] Simulando inferência MT5 com ONNX Runtime...
+  📊 Barras coletadas   : 314 (últimas barras ao vivo)
+  🕐 Última barra       : 2025-06-01 14:00:00
+  📈 Close atual        : 1.08198
+  〰  MA atual (SMA 20)  : 1.08234
+  ⚡ ATR atual          : 0.00087
+  🔮 y_pred (delta/ATR) : +0.0657
+  🎯 MA prevista (+5b)  : 1.08291
+  📐 Variação           : +5.7 pips ↑ UP
+  ✅ 09_mt5_simulation.png
 
 ============================================================
   ✅ PIPELINE CONCLUÍDO
-  Tempo total: 4m 38s
+  Tempo total: 4m 41s
   Artefatos: artifacts/EURUSD_H1_MA20_F5/
   Diagnóstico: 🟢 BOM APRENDIZADO
 ============================================================
 ```
-
-### Fluxo `--mode predict`
-
-1. Verificar se `run_dir` existe e contém `model.onnx` + `onnx_metadata.json` + `scaler.pkl`; se não, indicar que é necessário treinar primeiro
-2. Coletar dados recentes do MT5
-3. Rodar inferência via ONNX Runtime (mais rápido e valida que o export está funcional)
-4. Converter delta previsto para preço: `ma_prevista = ma_atual + (y_pred * atr_atual)`
-5. Imprimir resultado formatado
-6. Gerar e salvar plot de forecast em tempo real
 
 ---
 
@@ -787,7 +1001,9 @@ scikit-learn>=1.3.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 joblib>=1.3.0
+onnx>=1.15.0
 onnxruntime>=1.17.0
+onnxscript>=0.1.0
 ```
 
 ---
@@ -817,6 +1033,8 @@ onnxruntime>=1.17.0
 - [ ] Run dir criado antes de qualquer tentativa de salvar arquivo
 - [ ] ONNX validado contra PyTorch antes de salvar (`max_diff < 1e-5`)
 - [ ] `onnx_metadata.json` inclui `scaler_min` e `scaler_max` como listas (para replicar normalização em MQL5)
+- [ ] Simulação MT5 (Etapa 9) usa **somente** `onnx_metadata.json` para normalizar — nunca o `.pkl`
+- [ ] Ordem das features na simulação bate exatamente com `feature_order` do metadata
 
 ---
 

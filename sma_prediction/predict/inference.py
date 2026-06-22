@@ -74,7 +74,7 @@ def predict_next(run_dir: str, config: dict) -> dict:
         )
 
     window = df_feat.iloc[-lookback:]
-    x = scaler.transform(window[feature_order].values).astype(np.float32)
+    x = scaler.transform(window[feature_order]).astype(np.float32)
     x = x[None, :, :]  # (1, lookback, num_features)
 
     session = ort.InferenceSession(

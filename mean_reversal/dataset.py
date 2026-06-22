@@ -11,7 +11,7 @@ from datetime import datetime
 
 SYMBOL = "EURUSD"
 TIMEFRAME = mt5.TIMEFRAME_M5
-START_DATE = datetime(2025, 1, 1)
+START_DATE = datetime(2025, 4, 1)
 END_DATE   = datetime(2026, 4, 28)
 
 BB_PERIOD = 20

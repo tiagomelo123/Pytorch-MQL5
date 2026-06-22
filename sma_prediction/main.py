@@ -1,17 +1,15 @@
 """Entry point CLI do pipeline de previsão de média móvel.
 
 Sem lógica de negócio aqui: apenas parse de argumentos e despacho para o
-``pipeline.runner`` (modo train) ou ``predict.inference`` (modo predict).
+``pipeline.runner``.
 """
 
 import argparse
-import json
 import logging
 import sys
 
 from config import build_config
-from pipeline.runner import build_run_dir, run_pipeline
-from predict.inference import predict_next
+from pipeline.runner import run_pipeline
 
 
 def _setup_logging() -> None:
@@ -41,14 +39,14 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--bars", type=int, default=None, dest="bars_history", help="Barras históricas")
     p.add_argument(
-        "--mode", type=str, default="train", choices=["train", "predict"],
-        help="Modo de execução",
+        "--retrain", action="store_true", default=False,
+        help="Força novo treino mesmo se modelo existir (sobrescreve artefatos)",
     )
     return p.parse_args()
 
 
 def main() -> int:
-    """Função principal: monta config e despacha conforme o modo.
+    """Função principal: monta config e despacha para o runner.
 
     Returns:
         Código de saída (0 = sucesso, 1 = erro).
@@ -65,38 +63,12 @@ def main() -> int:
     logger = logging.getLogger("main")
 
     try:
-        if args.mode == "train":
-            run_pipeline(config)
-        else:
-            run_dir = build_run_dir(config)
-            result = predict_next(run_dir, config)
-            _print_forecast(result)
+        run_pipeline(config, retrain=args.retrain)
         return 0
     except Exception as exc:  # erro descritivo, sem stacktrace bruto no terminal
         logger.error("❌ Falha no pipeline: %s", exc)
         logging.getLogger(__name__).debug("Detalhe:", exc_info=True)
         return 1
-
-
-def _print_forecast(result: dict) -> None:
-    """Imprime o resultado de previsão formatado no terminal.
-
-    Args:
-        result: dicionário retornado por ``predict_next``.
-    """
-    print("\n" + "=" * 50)
-    print(
-        f"  PREVISÃO {result['symbol']} {result['timeframe']} "
-        f"SMA{result['ma_period']} (+{result['forecast_steps']})"
-    )
-    print("=" * 50)
-    print(f"  MA atual : {result['current_ma']}")
-    for f in result["forecast"]:
-        print(f"  +{f['bar']} barra(s): {f['ma_value']}")
-    print(f"  Direção  : {result['direction']}")
-    print(f"  Gerado em: {result['generated_at']}")
-    print("=" * 50)
-    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

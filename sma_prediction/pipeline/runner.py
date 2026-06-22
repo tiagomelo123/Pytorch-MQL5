@@ -1,5 +1,6 @@
 """Orquestrador central do pipeline completo de previsão da MA."""
 
+import json
 import logging
 import os
 import time
@@ -45,14 +46,111 @@ def _banner(config: dict, run_dir: str) -> None:
     logger.info("=" * 60)
 
 
-def run_pipeline(config: dict) -> dict:
-    """Executa todas as etapas do pipeline de treino em sequência.
+def _model_exists(run_dir: str) -> bool:
+    """Verifica se os três artefatos obrigatórios já existem no run_dir.
 
     Args:
+        run_dir: diretório de artefatos do run.
+
+    Returns:
+        True se model.onnx, onnx_metadata.json e scaler.pkl estiverem presentes.
+    """
+    required = ["model.onnx", "onnx_metadata.json", "scaler.pkl"]
+    return all(os.path.exists(os.path.join(run_dir, f)) for f in required)
+
+
+def _prompt_existing_model(run_dir: str, config: dict) -> int:
+    """Exibe informações do modelo salvo e pede ao usuário o que fazer.
+
+    Args:
+        run_dir: diretório de artefatos do run.
         config: dicionário de configuração.
 
     Returns:
-        Dicionário com ``run_dir``, ``metrics`` e ``diagnostico``.
+        1 = usar modelo existente, 2 = retreinar, 3 = cancelar.
+    """
+    onnx_path = os.path.join(run_dir, "model.onnx")
+    trained_at = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(onnx_path))
+    )
+    onnx_kb = os.path.getsize(onnx_path) // 1024
+
+    mae_str = dir_str = "N/A"
+    metrics_path = os.path.join(run_dir, "metrics_test.json")
+    if os.path.exists(metrics_path):
+        with open(metrics_path, encoding="utf-8") as f:
+            m = json.load(f)
+        g = m.get("global", {})
+        mae_str = f"{g.get('mae_pips', 'N/A')} pips"
+        dir_acc = g.get("directional_acc", None)
+        dir_str = f"{dir_acc * 100:.1f}%" if dir_acc is not None else "N/A"
+
+    print("\n" + "=" * 60)
+    print(
+        f"  {config['symbol']} | {config['timeframe']} | "
+        f"SMA {config['ma_period']} | Forecast +{config['forecast_steps']} barras"
+    )
+    print("=" * 60)
+    print(f"\n⚠️  Modelo já treinado encontrado em: {run_dir}/")
+    print(f"   Treinado em : {trained_at}")
+    print(f"   MAE test    : {mae_str}")
+    print(f"   Dir. Acc    : {dir_str}")
+    print(f"   ONNX        : model.onnx ({onnx_kb} KB)")
+    print(
+        "\n   O que deseja fazer?\n"
+        "   [1] Usar modelo existente → gerar apenas inferência e gráficos\n"
+        "   [2] Treinar novamente     → substituir modelo atual\n"
+        "   [3] Cancelar\n"
+    )
+    while True:
+        choice = input("Escolha (1/2/3): ").strip()
+        if choice in ("1", "2", "3"):
+            return int(choice)
+        print("   Opção inválida. Digite 1, 2 ou 3.")
+
+
+def _run_inference_only(config: dict, run_dir: str, t_start: float) -> dict:
+    """Executa apenas a inferência com o modelo já treinado (opção 1 do menu).
+
+    Args:
+        config: dicionário de configuração.
+        run_dir: diretório de artefatos.
+        t_start: timestamp de início (para medir tempo total).
+
+    Returns:
+        Dicionário com ``run_dir`` e ``result`` da inferência.
+    """
+    from predict.inference import predict_next
+
+    logger.info("✅ Modelo existente carregado")
+    logger.info("⏭  Pulando etapas 1 a 8 — executando apenas inferência ao vivo\n")
+
+    result = predict_next(run_dir, config)
+
+    elapsed = time.time() - t_start
+    mins, secs = divmod(int(elapsed), 60)
+    logger.info("=" * 60)
+    logger.info("  ✅ INFERÊNCIA CONCLUÍDA")
+    logger.info("  Tempo total: %dm %ds", mins, secs)
+    logger.info("  Artefatos: %s/plots/09_live_forecast.png", run_dir)
+    logger.info("=" * 60)
+    return {"run_dir": run_dir, "result": result}
+
+
+def run_pipeline(config: dict, retrain: bool = False) -> dict | None:
+    """Executa o pipeline completo ou a inferência com modelo existente.
+
+    Se um modelo já estiver treinado e ``retrain`` for False, exibe um menu
+    interativo [1/2/3] para o usuário escolher a ação. Com ``retrain=True``
+    sobrescreve artefatos sem perguntar.
+
+    Args:
+        config: dicionário de configuração.
+        retrain: se True, força novo treino mesmo que modelo exista.
+
+    Returns:
+        Dicionário com ``run_dir``, ``metrics`` e ``diagnostico``,
+        ou None se o usuário cancelar (opção 3).
 
     Raises:
         Exception: propaga erros de qualquer etapa com contexto no log.
@@ -61,6 +159,16 @@ def run_pipeline(config: dict) -> dict:
     run_dir = build_run_dir(config)
     os.makedirs(run_dir, exist_ok=True)
     _banner(config, run_dir)
+
+    # --- Detecção de modelo existente ---
+    if _model_exists(run_dir) and not retrain:
+        choice = _prompt_existing_model(run_dir, config)
+        if choice == 3:
+            logger.info("Operação cancelada pelo usuário.")
+            return None
+        if choice == 1:
+            return _run_inference_only(config, run_dir, t_start)
+        # choice == 2: treinar novamente → prossegue para o pipeline completo
 
     # [ETAPA 1/8] Coleta
     logger.info("[ETAPA 1/8] Conectando ao MT5 e coletando dados...")

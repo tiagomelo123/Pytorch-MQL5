@@ -121,7 +121,7 @@ def build_datasets(df_features: pd.DataFrame, config: dict, run_dir: str) -> dic
     scaler = MinMaxScaler()
     scaler.fit(df_features[feature_cols].iloc[:train_end])
 
-    feat_all = scaler.transform(df_features[feature_cols].values)
+    feat_all = scaler.transform(df_features[feature_cols])
     targ_all = df_features[target_cols].values
     ma_all = df_features["ma"].values
     atr_all = df_features["atr"].values
