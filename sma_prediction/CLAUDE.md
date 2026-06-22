@@ -132,6 +132,7 @@ model.onnx               # modelo exportado para uso no MQL5
 scaler.pkl               # MinMaxScaler serializado
 loss_history.json        # loss por época (train e val)
 metrics_test.json        # métricas finais no test set
+training_config.json     # hiperparâmetros usados no treino (lr, batch, dropout)
 plots/
   ├── 01_raw_price.png              # close e MA histórica
   ├── 02_features.png               # painel com todas as features
@@ -826,6 +827,7 @@ def predict_next(run_dir: str) -> dict:
 ```bash
 python main.py [--symbol STR] [--timeframe STR] [--ma-period INT]
                [--forecast-steps INT] [--bars INT] [--retrain]
+               [--lr FLOAT] [--batch-size INT] [--dropout FLOAT]
 ```
 
 | Argumento | Padrão | Descrição |
@@ -836,6 +838,9 @@ python main.py [--symbol STR] [--timeframe STR] [--ma-period INT]
 | `--forecast-steps` | `5` | Horizonte de previsão |
 | `--bars` | `5000` | Barras históricas |
 | `--retrain` | `False` | Força novo treino mesmo se modelo existir (flag, sem valor) |
+| `--lr` | `0.001` | Learning rate (sobrescreve config) |
+| `--batch-size` | `64` | Batch size (sobrescreve config) |
+| `--dropout` | `0.2` | Dropout (sobrescreve config) |
 
 ### Lógica de detecção de modelo existente
 
@@ -864,26 +869,54 @@ model_exists = all([
    MAE test    : 3.02 pips
    Dir. Acc    : 90.3%
    ONNX        : model.onnx (287 KB)
+   Diagnóstico : 🟡 INSTÁVEL (gap treino→val: +111.8%)
+
+   Hiperparâmetros usados no treino anterior:
+   LEARNING_RATE : 0.001000
+   BATCH_SIZE    : 64
+   DROPOUT       : 0.200
 
    O que deseja fazer?
    [1] Usar modelo existente → gerar apenas inferência e gráficos
-   [2] Treinar novamente     → substituir modelo atual
-   [3] Cancelar
+   [2] Treinar novamente     → manter hiperparâmetros atuais
+   [3] Treinar novamente     → ajustar hiperparâmetros antes
+   [4] Cancelar
 
-Escolha (1/2/3): _
+Escolha (1/2/3/4): _
 ```
 
 **Se usuário escolhe 1:** pula etapas 1 a 8, executa apenas a etapa 9 (simulação MT5) e gera o `09_mt5_simulation.png` atualizado com dados ao vivo.
 
-**Se usuário escolhe 2:** executa pipeline completo, sobrescrevendo artefatos anteriores.
+**Se usuário escolhe 2:** executa pipeline completo com os mesmos hiperparâmetros, sobrescrevendo artefatos anteriores.
 
-**Se usuário escolhe 3:** encerra sem fazer nada.
+**Se usuário escolhe 3:** exibe prompt de ajuste de hiperparâmetros antes de iniciar o treino:
 
-**Se modelo existe e `--retrain` foi passado:** pula o prompt e vai direto para o pipeline completo, sobrescrevendo tudo. Útil para automação e scripts.
+```
+   Ajuste de hiperparâmetros (Enter = manter valor atual):
+
+   LEARNING_RATE [atual: 0.001000] → _
+   BATCH_SIZE    [atual: 64      ] → _
+   DROPOUT       [atual: 0.200   ] → _
+
+   ──────────────────────────────────────
+   Hiperparâmetros confirmados:
+   LEARNING_RATE : 0.000500  ← alterado
+   BATCH_SIZE    : 32        ← alterado
+   DROPOUT       : 0.300     ← alterado
+
+   Confirmar e iniciar treino? (s/n): _
+```
+
+Após confirmação, executa pipeline completo com os novos valores. Os hiperparâmetros usados são salvos em `run_dir/training_config.json` ao final do treino para referência futura.
+
+**Se usuário escolhe 4:** encerra sem fazer nada.
+
+**Se modelo existe e `--retrain` foi passado:** pula o prompt e vai direto para o pipeline completo com os hiperparâmetros do config (ou os passados via `--lr`, `--batch-size`, `--dropout`). Útil para automação.
 
 ```bash
-# Retreinar sem prompt
-python main.py --symbol EURUSD --timeframe H4 --ma-period 20 --forecast-steps 5 --retrain
+# Retreinar sem prompt com hiperparâmetros ajustados
+python main.py --symbol EURUSD --timeframe H4 --ma-period 20 --forecast-steps 5 \
+               --retrain --lr 0.0005 --batch-size 32 --dropout 0.3
 ```
 
 ### Fluxo quando modelo existe e usuário escolhe opção 1
@@ -1035,6 +1068,8 @@ onnxscript>=0.1.0
 - [ ] `onnx_metadata.json` inclui `scaler_min` e `scaler_max` como listas (para replicar normalização em MQL5)
 - [ ] Simulação MT5 (Etapa 9) usa **somente** `onnx_metadata.json` para normalizar — nunca o `.pkl`
 - [ ] Ordem das features na simulação bate exatamente com `feature_order` do metadata
+- [ ] `training_config.json` salvo ao final de todo treino com `lr`, `batch_size`, `dropout` e `trained_at`
+- [ ] Menu interativo lê `training_config.json` para exibir hiperparâmetros do treino anterior
 
 ---
 

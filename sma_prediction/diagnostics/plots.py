@@ -117,7 +117,7 @@ def plot_features(df: pd.DataFrame, config: dict, run_dir: str) -> str:
             ax.set_title(f"{col}\nμ={serie.mean():.3f} σ={serie.std():.3f}")
         if nan_pct > 1.0:
             ax.text(
-                0.5, 0.5, f"⚠️ {nan_pct:.1f}% NaN", color="red", fontsize=11,
+                0.5, 0.5, f"AVISO: {nan_pct:.1f}% NaN", color="red", fontsize=11,
                 ha="center", va="center", transform=ax.transAxes, fontweight="bold",
             )
 
@@ -166,7 +166,7 @@ def plot_dataset_split(df: pd.DataFrame, splits: dict, config: dict, run_dir: st
     means = [np.mean(v) for v, _ in parts.values() if len(v)]
     aviso = ""
     if means and (max(means) - min(means)) / (np.mean(means) + 1e-12) > 0.1:
-        aviso = " ⚠️ distribuições divergentes entre splits"
+        aviso = " [AVISO] distribuicoes divergentes entre splits"
     fig.suptitle(f"Split do dataset — {_run_id(config)}{aviso}", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     return _save(fig, run_dir, "03_dataset_split.png", config["plot_dpi"])
@@ -206,16 +206,16 @@ def plot_training_loss(loss_history: list, config: dict, run_dir: str) -> str:
 
     checks = "\n".join(f"   {c}" for c in diag["checks"])
     texto = (
-        "📊 DIAGNÓSTICO DE APRENDIZADO\n"
+        "DIAGNOSTICO DE APRENDIZADO\n"
         "─────────────────────────────\n"
-        f"Épocas treinadas   : {diag['epochs_trained']} / {config['epochs']}\n"
-        f"Melhor val_loss    : {diag['best_val_loss']:.6f} (época {best_epoch})\n"
+        f"Epocas treinadas   : {diag['epochs_trained']} / {config['epochs']}\n"
+        f"Melhor val_loss    : {diag['best_val_loss']:.6f} (epoca {best_epoch})\n"
         f"Loss final treino  : {diag['final_train_loss']:.6f}\n"
         f"Loss final val     : {diag['final_val_loss']:.6f}\n"
-        f"Gap treino→val     : {diag['gap_pct']:+.1f}%\n\n"
-        f"🔎 Padrão: {diag['emoji']} {diag['titulo']}\n"
+        f"Gap treino->val    : {diag['gap_pct']:+.1f}%\n\n"
+        f"Padrao: {diag['titulo']}\n"
         f"{checks}\n\n"
-        f"💡 {diag['sugestao']}\n"
+        f"Sugestao: {diag['sugestao']}\n"
         "─────────────────────────────"
     )
     ax_txt.axis("off")
@@ -295,7 +295,7 @@ def plot_error_distribution(preds: dict, config: dict, run_dir: str) -> str:
     txt = f"média={media:.2f} | σ={std:.2f} | %positivos={pos_pct:.1f}%"
     if abs(media) > 2:
         sentido = "superestimar" if media > 0 else "subestimar"
-        txt += f"\n⚠️ Viés detectado — modelo tende a {sentido}"
+        txt += f"\nAVISO: Vies detectado - modelo tende a {sentido}"
     ax.text(
         0.02, 0.95, txt, transform=ax.transAxes, va="top", fontsize=9,
         bbox=dict(boxstyle="round", fc="white", alpha=0.8),
@@ -347,7 +347,7 @@ def plot_backtest_overlay(preds: dict, metrics: dict, config: dict, run_dir: str
     n_bars = min(config["backtest_bars"], len(preds["anchor_time"]))
     sl = slice(-n_bars, None)
 
-    t = pd.to_datetime(preds["anchor_time"][sl])
+    t = pd.Series(pd.to_datetime(preds["anchor_time"][sl])).reset_index(drop=True)
     ma_real = preds["y_true_price"][sl, 0]
     ma_pred = preds["y_pred_price"][sl, 0]
     anchor_ma = preds["anchor_ma"][sl]
