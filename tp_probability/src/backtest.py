@@ -36,6 +36,8 @@ def run_backtest(
     df: pd.DataFrame,
     model,
     threshold: float = THRESHOLD,
+    tp_pips: float = TP_PIPS,
+    sl_pips: float = SL_PIPS,
     spread_pips: float = SPREAD_PIPS,
     slippage_pips: float = SLIPPAGE_PIPS,
     commission_pips: float = COMMISSION_PIPS,
@@ -49,8 +51,8 @@ def run_backtest(
     total_cost = spread_pips + slippage_pips + commission_pips
     trades["pips"] = np.where(
         trades["label"].astype(int) == 1,
-        TP_PIPS - total_cost,
-        -SL_PIPS - total_cost,
+        tp_pips - total_cost,
+        -sl_pips - total_cost,
     )
     trades["equity"] = trades["pips"].cumsum()
 
@@ -119,16 +121,29 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Roda backtest com threshold.")
     parser.add_argument("--symbol", default=SYMBOL, help="Ativo. Ex: EURUSD, GBPUSD, USDJPY.")
     parser.add_argument("--timeframe", default=TIMEFRAME, help="Timeframe. Ex: M1, M5, M15, H1.")
+    parser.add_argument("--tp-pips", type=float, default=TP_PIPS, help="Take Profit usado no treino.")
+    parser.add_argument("--sl-pips", type=float, default=SL_PIPS, help="Stop Loss usado no treino.")
     parser.add_argument("--threshold", type=float, default=THRESHOLD, help="Probabilidade minima.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    model = load_model(model_path(args.symbol, args.timeframe))
-    df = load_processed_dataset(processed_data_path(args.symbol, args.timeframe))
-    _, metrics = run_backtest(df, model, threshold=args.threshold)
-    output_metrics_path = backtest_report_path(args.symbol, args.timeframe)
+    model = load_model(model_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips))
+    df = load_processed_dataset(processed_data_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips))
+    _, metrics = run_backtest(
+        df,
+        model,
+        threshold=args.threshold,
+        tp_pips=args.tp_pips,
+        sl_pips=args.sl_pips,
+    )
+    metrics["symbol"] = args.symbol.upper()
+    metrics["timeframe"] = args.timeframe.upper()
+    metrics["tp_pips"] = args.tp_pips
+    metrics["sl_pips"] = args.sl_pips
+    metrics["threshold"] = args.threshold
+    output_metrics_path = backtest_report_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips)
     save_metrics_report(metrics, output_metrics_path)
     print_backtest_metrics(metrics)
     print(f"Metricas do backtest salvas em: {output_metrics_path}")

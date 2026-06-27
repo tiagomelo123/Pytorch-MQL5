@@ -12,6 +12,8 @@ from .config import (
     PROCESSED_DATA_PATH,
     SYMBOL,
     TIMEFRAME,
+    SL_PIPS,
+    TP_PIPS,
     learning_curve_path,
     metrics_report_path,
     model_path,
@@ -95,18 +97,24 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Treina a rede neural TP/SL.")
     parser.add_argument("--symbol", default=SYMBOL, help="Ativo. Ex: EURUSD, GBPUSD, USDJPY.")
     parser.add_argument("--timeframe", default=TIMEFRAME, help="Timeframe. Ex: M1, M5, M15, H1.")
+    parser.add_argument("--tp-pips", type=float, default=TP_PIPS, help="Take Profit usado no dataset.")
+    parser.add_argument("--sl-pips", type=float, default=SL_PIPS, help="Stop Loss usado no dataset.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    dataset_path = processed_data_path(args.symbol, args.timeframe)
-    output_model_path = model_path(args.symbol, args.timeframe)
-    output_metrics_path = metrics_report_path(args.symbol, args.timeframe)
-    output_curve_path = learning_curve_path(args.symbol, args.timeframe)
+    dataset_path = processed_data_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips)
+    output_model_path = model_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips)
+    output_metrics_path = metrics_report_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips)
+    output_curve_path = learning_curve_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips)
 
     df = load_processed_dataset(dataset_path)
     model, metrics = train_model(df)
+    metrics["symbol"] = args.symbol.upper()
+    metrics["timeframe"] = args.timeframe.upper()
+    metrics["tp_pips"] = args.tp_pips
+    metrics["sl_pips"] = args.sl_pips
 
     output_model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, output_model_path)

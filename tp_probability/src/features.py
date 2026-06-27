@@ -8,6 +8,8 @@ from .config import (
     RAW_DATA_PATH,
     SYMBOL,
     TIMEFRAME,
+    SL_PIPS,
+    TP_PIPS,
     pip_size_for_symbol,
     processed_data_path,
     raw_data_path,
@@ -67,10 +69,19 @@ def build_dataset(
     raw_path=RAW_DATA_PATH,
     output_path=PROCESSED_DATA_PATH,
     symbol: str = SYMBOL,
+    tp_pips: float = TP_PIPS,
+    sl_pips: float = SL_PIPS,
 ) -> pd.DataFrame:
     df = load_raw_data(raw_path)
     dataset = add_features(df)
-    dataset["label"] = create_buy_labels(dataset, pip_size=pip_size_for_symbol(symbol))
+    dataset["label"] = create_buy_labels(
+        dataset,
+        tp_pips=tp_pips,
+        sl_pips=sl_pips,
+        pip_size=pip_size_for_symbol(symbol),
+    )
+    dataset["tp_pips"] = tp_pips
+    dataset["sl_pips"] = sl_pips
     dataset = dataset.dropna().reset_index(drop=True)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,16 +93,19 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Cria dataset com features e labels.")
     parser.add_argument("--symbol", default=SYMBOL, help="Ativo. Ex: EURUSD, GBPUSD, USDJPY.")
     parser.add_argument("--timeframe", default=TIMEFRAME, help="Timeframe. Ex: M1, M5, M15, H1.")
+    parser.add_argument("--tp-pips", type=float, default=TP_PIPS, help="Take Profit em pips.")
+    parser.add_argument("--sl-pips", type=float, default=SL_PIPS, help="Stop Loss em pips.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     input_path = raw_data_path(args.symbol, args.timeframe)
-    output_path = processed_data_path(args.symbol, args.timeframe)
-    dataset = build_dataset(input_path, output_path, args.symbol)
+    output_path = processed_data_path(args.symbol, args.timeframe, args.tp_pips, args.sl_pips)
+    dataset = build_dataset(input_path, output_path, args.symbol, args.tp_pips, args.sl_pips)
     label_counts = dataset["label"].value_counts().sort_index().to_dict()
     print(f"Dataset salvo em: {output_path}")
+    print(f"TP/SL: {args.tp_pips:g}/{args.sl_pips:g} pips")
     print(f"Linhas: {len(dataset)}")
     print(f"Distribuicao dos labels: {label_counts}")
 
