@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+
+data/raw/*.csv
+data/processed/*.csv
+models/*.pkl
+reports/*/*.json
+reports/*/*.png
+
+!.gitkeep
