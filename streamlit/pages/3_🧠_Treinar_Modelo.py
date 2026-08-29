@@ -26,6 +26,14 @@ from core.config import (
     DEFAULT_LEARNING_RATE,
     DEFAULT_LOOKBACK_WINDOW,
     DEFAULT_MIN_RETRACEMENT,
+    DEFAULT_MR_ADX_MAX,
+    DEFAULT_MR_ATR_PERIOD,
+    DEFAULT_MR_HORIZON,
+    DEFAULT_MR_SL_ATR_MULT,
+    DEFAULT_MR_TP_ATR_MULT,
+    DEFAULT_MR_USE_ADX_FILTER,
+    DEFAULT_MR_ZSCORE_THRESHOLD,
+    DEFAULT_MR_ZSCORE_WINDOW,
     DEFAULT_NUM_LAYERS,
     DEFAULT_PATIENCE,
     DEFAULT_PULLBACK_HORIZON,
@@ -63,6 +71,7 @@ tarefa = st.selectbox("Tarefa", TAREFAS)
 st.info(TAREFA_DESCRICOES.get(tarefa, ""), icon="🎯")
 is_pullback = tarefa.startswith("Classificação (pullback")
 is_regime = tarefa.startswith("Classificação (regime")
+is_mean_reversal = tarefa.startswith("Classificação (reversão à média")
 is_classificacao = tarefa.startswith("Classificação")
 
 if is_regime:
@@ -116,6 +125,42 @@ elif is_regime:
         f"**{REGIME_CLASSES[1]}** (dentro do limiar) · **{REGIME_CLASSES[2]}** (retorno futuro > limiar). "
         "O limiar é adaptativo: `k × volatilidade recente × √horizonte`."
     )
+elif is_mean_reversal:
+    with c1:
+        zscore_window = st.number_input(
+            "Janela do z-score (barras)", min_value=5, max_value=200, value=DEFAULT_MR_ZSCORE_WINDOW
+        )
+        zscore_threshold = st.number_input(
+            "Limiar de z-score (barra 'esticada')", min_value=0.5, max_value=5.0,
+            value=DEFAULT_MR_ZSCORE_THRESHOLD, step=0.1,
+            help="Quanto maior, mais raro (e mais extremo) o candidato a reversão.",
+        )
+        use_adx_filter = st.checkbox(
+            "Filtrar por ADX (só operar sem tendência forte)", value=DEFAULT_MR_USE_ADX_FILTER
+        )
+        adx_max = st.number_input(
+            "ADX máximo para considerar candidato", min_value=5.0, max_value=60.0,
+            value=DEFAULT_MR_ADX_MAX, step=1.0, disabled=not use_adx_filter,
+        )
+    with c2:
+        tp_atr_mult = st.number_input(
+            "Alvo (TP) em múltiplos do ATR", min_value=0.1, max_value=10.0,
+            value=DEFAULT_MR_TP_ATR_MULT, step=0.1,
+        )
+        sl_atr_mult = st.number_input(
+            "Stop (SL) em múltiplos do ATR", min_value=0.1, max_value=10.0,
+            value=DEFAULT_MR_SL_ATR_MULT, step=0.1,
+        )
+        mr_horizon = st.number_input(
+            "Barras à frente para checar TP/SL", min_value=2, max_value=300, value=DEFAULT_MR_HORIZON
+        )
+        lookback = st.number_input("Janela de contexto (lookback)", min_value=5, max_value=500, value=DEFAULT_LOOKBACK_WINDOW)
+    atr_period = DEFAULT_MR_ATR_PERIOD
+    horizon = mr_horizon
+    st.caption(
+        "Rótulo: **1 = TP atingido antes do SL** (reversão bem-sucedida) · "
+        "**0 = SL atingido antes (ou nenhum dos dois dentro do horizonte)**."
+    )
 else:
     with c1:
         horizon = st.number_input("Horizonte de previsão (barras à frente)", min_value=1, max_value=200, value=DEFAULT_HORIZON)
@@ -127,6 +172,8 @@ if is_pullback:
     default_features = feat.FEATURES_PULLBACK_SUGERIDAS
 elif is_regime:
     default_features = feat.FEATURES_REGIME_SUGERIDAS
+elif is_mean_reversal:
+    default_features = feat.FEATURES_MEAN_REVERSAL_SUGERIDAS
 else:
     default_features = ["Retorno (close a close)", "Média móvel 20", "RSI 14", "Volatilidade (desvio padrão 20)"]
 
@@ -210,6 +257,35 @@ if iniciar:
             st.caption(f"Barras rotuladas: {n_rotulados}")
             st.bar_chart(dist_df.set_index("regime"), height=200)
 
+            features_df = feat.build_features(df_raw, feature_keys)
+            feature_cols = feat.feature_columns(features_df)
+            X, y, tempos = ds.build_windows_labeled(features_df, feature_cols, labels_df, int(lookback))
+
+        elif is_mean_reversal:
+            labels_df = labeling.build_mean_reversal_dataset(
+                df_raw,
+                zscore_window=int(zscore_window),
+                zscore_threshold=float(zscore_threshold),
+                use_adx_filter=bool(use_adx_filter),
+                adx_max=float(adx_max),
+                atr_period=int(atr_period),
+                tp_atr_mult=float(tp_atr_mult),
+                sl_atr_mult=float(sl_atr_mult),
+                horizon=int(mr_horizon),
+            )
+            n_candidatos = int(labels_df["is_candidate"].sum())
+            n_rotulados = int(labels_df["label"].notna().sum())
+            if n_rotulados == 0:
+                st.error(
+                    "Nenhum candidato a reversão à média foi encontrado com esses parâmetros. "
+                    "Tente reduzir o limiar de z-score, desativar o filtro de ADX ou exportar mais barras."
+                )
+                st.stop()
+            taxa_tp = labels_df["label"].mean()
+            st.caption(
+                f"Candidatos encontrados: {n_candidatos} · rotulados: {n_rotulados} · "
+                f"TP antes do SL: {taxa_tp:.1%} · SL antes/sem resolução: {1 - taxa_tp:.1%}"
+            )
             features_df = feat.build_features(df_raw, feature_keys)
             feature_cols = feat.feature_columns(features_df)
             X, y, tempos = ds.build_windows_labeled(features_df, feature_cols, labels_df, int(lookback))
@@ -375,6 +451,17 @@ if iniciar:
             "vol_window": int(vol_window),
             "k_lateral": float(k_lateral),
             "classes": REGIME_CLASSES,
+        }
+    if is_mean_reversal:
+        run_config["parametros_reversao_media"] = {
+            "zscore_window": int(zscore_window),
+            "zscore_threshold": float(zscore_threshold),
+            "use_adx_filter": bool(use_adx_filter),
+            "adx_max": float(adx_max),
+            "atr_period": int(atr_period),
+            "tp_atr_mult": float(tp_atr_mult),
+            "sl_atr_mult": float(sl_atr_mult),
+            "mr_horizon": int(mr_horizon),
         }
 
     with open(os.path.join(pasta, "config.json"), "w", encoding="utf-8") as f:

@@ -26,6 +26,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from core.features import _adx_wilder, _atr_wilder
+
 
 def detect_trend_ema(df: pd.DataFrame, ema_fast: int = 20, ema_slow: int = 50) -> pd.DataFrame:
     """Calcula EMAs rápida/lenta e a tendência vigente por cruzamento delas.
@@ -207,5 +209,127 @@ def build_market_regime_labels(
             "time": df["time"].reset_index(drop=True),
             "label": label.reset_index(drop=True),
             "limiar": limiar.reset_index(drop=True),
+        }
+    )
+
+
+def build_mean_reversal_dataset(
+    df: pd.DataFrame,
+    zscore_window: int = 20,
+    zscore_threshold: float = 2.0,
+    use_adx_filter: bool = True,
+    adx_max: float = 20.0,
+    atr_period: int = 14,
+    tp_atr_mult: float = 1.5,
+    sl_atr_mult: float = 1.0,
+    horizon: int = 20,
+) -> pd.DataFrame:
+    """Constrói o dataset de candidatos a reversão à média e seus rótulos.
+
+    Detecção do "setup" (barra esticada): o preço está a mais de
+    ``zscore_threshold`` desvios padrão da SMA(``zscore_window``) — z-score
+    positivo = esticado para cima (candidato a venda/reversão para baixo),
+    z-score negativo = esticado para baixo (candidato a compra/reversão para
+    cima). Opcionalmente, só considera candidatos quando o ADX de Wilder
+    está abaixo de ``adx_max`` (mercado sem tendência forte, mais propício a
+    reversões).
+
+    Rótulo (barreira tripla baseada em ATR): a partir da barra candidata,
+    define um alvo (TP) a ``tp_atr_mult`` × ATR em direção à média e um stop
+    (SL) a ``sl_atr_mult`` × ATR na direção contrária (continuação da
+    extensão). Observa até ``horizon`` barras à frente, barra a barra:
+    ``label = 1`` se o TP for tocado antes do SL, ``label = 0`` se o SL for
+    tocado antes (ou se ambos forem tocados na mesma barra — resultado
+    ambíguo tratado de forma conservadora — ou se nenhum dos dois for
+    tocado dentro do horizonte).
+
+    Args:
+        df: OHLCV bruto (colunas ``time, open, high, low, close, ...``).
+        zscore_window: janela (barras) da SMA/desvio padrão do z-score.
+        zscore_threshold: |z-score| mínimo para considerar a barra esticada.
+        use_adx_filter: se ``True``, só marca candidatos com ADX < ``adx_max``.
+        adx_max: limite de ADX (força de tendência) para o filtro acima.
+        atr_period: período do ATR de Wilder usado para o TP/SL.
+        tp_atr_mult: múltiplo do ATR até o alvo (na direção da média).
+        sl_atr_mult: múltiplo do ATR até o stop (na direção contrária).
+        horizon: barras à frente observadas para checar TP/SL.
+
+    Returns:
+        DataFrame indexado como ``df`` com colunas: ``time``, ``zscore``,
+        ``is_candidate`` (bool), ``direction`` (``1`` = esperando alta/
+        reversão de queda, ``-1`` = esperando baixa/reversão de alta, ``0``
+        fora de candidatos), ``label`` (1.0 = TP antes do SL, 0.0 = SL antes
+        ou sem resolução, ``NaN`` para barras que não são candidatas).
+    """
+    close = df["close"]
+    sma = close.rolling(zscore_window).mean()
+    desvio = close.rolling(zscore_window).std()
+    zscore = (close - sma) / desvio.replace(0, np.nan)
+
+    atr = _atr_wilder(df, atr_period)
+    adx = _adx_wilder(df, atr_period, atr=atr) if use_adx_filter else None
+
+    high = df["high"].to_numpy(dtype=float)
+    low = df["low"].to_numpy(dtype=float)
+    close_arr = close.to_numpy(dtype=float)
+    atr_arr = atr.to_numpy(dtype=float)
+    z_arr = zscore.to_numpy(dtype=float)
+    adx_arr = adx.to_numpy(dtype=float) if adx is not None else None
+    n = len(df)
+
+    is_candidate = np.zeros(n, dtype=bool)
+    direction = np.zeros(n)
+    label = np.full(n, np.nan)
+
+    limite = n - horizon
+    inicio = max(zscore_window, atr_period)
+    for i in range(inicio, max(inicio, limite)):
+        z = z_arr[i]
+        a = atr_arr[i]
+        if np.isnan(z) or np.isnan(a) or a <= 0 or abs(z) < zscore_threshold:
+            continue
+        if use_adx_filter:
+            adx_i = adx_arr[i]
+            if np.isnan(adx_i) or adx_i > adx_max:
+                continue
+
+        entry = close_arr[i]
+        if z > 0:
+            dir_i = -1.0  # esticado para cima -> espera reversão para baixo
+            tp_price = entry - tp_atr_mult * a
+            sl_price = entry + sl_atr_mult * a
+        else:
+            dir_i = 1.0  # esticado para baixo -> espera reversão para cima
+            tp_price = entry + tp_atr_mult * a
+            sl_price = entry - sl_atr_mult * a
+
+        is_candidate[i] = True
+        direction[i] = dir_i
+        resultado = 0.0
+        for j in range(i + 1, i + 1 + horizon):
+            if dir_i < 0:
+                tp_hit = low[j] <= tp_price
+                sl_hit = high[j] >= sl_price
+            else:
+                tp_hit = high[j] >= tp_price
+                sl_hit = low[j] <= sl_price
+            if tp_hit and sl_hit:
+                resultado = 0.0  # ambíguo na mesma barra -> conservador
+                break
+            if tp_hit:
+                resultado = 1.0
+                break
+            if sl_hit:
+                resultado = 0.0
+                break
+        label[i] = resultado
+
+    return pd.DataFrame(
+        {
+            "time": df["time"].reset_index(drop=True),
+            "zscore": zscore.reset_index(drop=True),
+            "is_candidate": is_candidate,
+            "direction": direction,
+            "label": label,
         }
     )

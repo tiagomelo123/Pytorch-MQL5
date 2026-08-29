@@ -54,6 +54,7 @@ TAREFAS = [
     "Classificação (direção do preço)",
     "Classificação (pullback vs. continuação de tendência)",
     "Classificação (regime de mercado: baixa/lateral/alta)",
+    "Classificação (reversão à média: TP vs. SL)",
 ]
 
 # Explicação curta de cada tarefa, mostrada na UI ao selecioná-la.
@@ -77,6 +78,12 @@ TAREFA_DESCRICOES = {
         "tendência de **baixa**, mercado **lateral** (sem tendência clara) ou tendência "
         "de **alta** — útil para adaptar a estratégia ao contexto do mercado."
     ),
+    "Classificação (reversão à média: TP vs. SL)": (
+        "Em barras **esticadas** em relação à média (z-score do preço acima/abaixo de um "
+        "limiar, opcionalmente só em mercado sem tendência forte pelo ADX), o modelo tenta "
+        "prever se uma operação de reversão à média **bateria o alvo (TP) antes do stop "
+        "(SL)** — alvo e stop definidos em múltiplos do ATR, dentro de um horizonte de barras."
+    ),
 }
 
 # Padrões da tarefa de pullback/continuação (core/labeling.py)
@@ -91,3 +98,13 @@ REGIME_CLASSES = ["Baixa", "Lateral", "Alta"]  # índices 0, 1, 2
 DEFAULT_REGIME_HORIZON = 20
 DEFAULT_REGIME_VOL_WINDOW = 20
 DEFAULT_REGIME_K_LATERAL = 1.0
+
+# Padrões da tarefa de reversão à média (core/labeling.py)
+DEFAULT_MR_ZSCORE_WINDOW = 20
+DEFAULT_MR_ZSCORE_THRESHOLD = 2.0
+DEFAULT_MR_USE_ADX_FILTER = True
+DEFAULT_MR_ADX_MAX = 20.0
+DEFAULT_MR_ATR_PERIOD = 14
+DEFAULT_MR_TP_ATR_MULT = 1.5
+DEFAULT_MR_SL_ATR_MULT = 1.0
+DEFAULT_MR_HORIZON = 20

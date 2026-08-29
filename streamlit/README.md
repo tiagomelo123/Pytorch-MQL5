@@ -44,14 +44,17 @@ streamlit/
     2_🗂️_Datasets.py             # gerencia datasets (local + Firebase)
     3_🧠_Treinar_Modelo.py       # configura e treina o modelo, com progresso ao vivo
     4_📊_Comparar_Modelos.py     # compara métricas e curvas de perda entre runs
+    5_📤_Exportar_ONNX.py        # exporta um modelo treinado para .onnx (uso em MQL5)
+    6_🔬_Comparar_Features.py    # treina várias combinações de features e compara métricas
   core/
     mt5_data.py                  # conexão e coleta OHLCV do MT5
     firebase_client.py           # upload/download no Firebase Storage
     features.py                  # engenharia de features (retornos, médias, RSI, ...)
-    labeling.py                  # rotulagem de pullback vs. continuação de tendência
+    labeling.py                  # rotulagem de pullback/continuação e de regime de mercado
     dataset.py                   # janelas supervisionadas, split, scaler, DataLoaders
     models.py                    # arquiteturas LSTM / GRU / MLP
     train.py                     # loop de treino com early stopping + avaliação
+    onnx_export.py               # exportação para ONNX com metadados de features
     registry.py                  # registro local dos modelos treinados (runs/registry.json)
   data_cache/                    # datasets baixados do MT5 (CSV)
   runs/                          # artefatos dos modelos treinados (model.pt, métricas, ...)
@@ -79,9 +82,33 @@ streamlit/
      (rompe a estrutura contrária antes). Parâmetros ajustáveis: períodos
      das EMAs, barras para confirmar um swing, horizonte de checagem da
      continuação e retração mínima para considerar um pullback.
+   - **Classificação (regime de mercado: baixa/lateral/alta)** — classifica
+     (3 classes) se as próximas N barras devem ter tendência de baixa, ficar
+     lateralizadas ou ter tendência de alta, usando um limiar adaptativo por
+     volatilidade (`k × desvio_padrão(retornos) × √horizonte`).
+   - **Classificação (reversão à média: TP vs. SL)** — em barras **esticadas**
+     em relação à média (z-score do preço vs. SMA acima/abaixo de um limiar,
+     opcionalmente só quando o ADX indica ausência de tendência forte),
+     classifica se uma operação de reversão à média bateria o **alvo (TP)**
+     antes do **stop (SL)** — alvo e stop definidos em múltiplos do ATR,
+     dentro de um horizonte de barras (barreira tripla). Parâmetros
+     ajustáveis: janela e limiar do z-score, filtro e limite de ADX,
+     múltiplos de ATR para TP/SL e horizonte de checagem.
 4. **Comparar Modelos**: veja todos os modelos já treinados em uma tabela,
    compare a métrica principal entre eles e sobreponha curvas de perda de
    validação de até 5 runs.
+5. **Exportar ONNX**: converte um modelo treinado para `.onnx` (opset 12,
+   compatível com MT5), com a ativação final já embutida (sigmoid/softmax) e
+   um `onnx_metadata.json` com a ordem e fórmula de cada feature e os
+   parâmetros de normalização — tudo que um EA em MQL5 precisa para
+   replicar o pré-processamento.
+6. **Comparar Features**: treina várias combinações de features com os
+   mesmos hiperparâmetros e compara as métricas de teste lado a lado —
+   manualmente, testando cada feature sozinha, ou removendo uma de cada vez
+   (leave-one-out). Ajuda a decidir empiricamente quantas e quais features
+   realmente melhoram o modelo, em vez de adivinhar. A melhor combinação
+   pode ser salva como um modelo normal, disponível em Comparar Modelos e
+   Exportar ONNX.
 
 ## Extensível
 

@@ -154,14 +154,16 @@ def export_to_onnx(
             + " · classe prevista = argmax do vetor"
         )
     elif output_mode == "classificacao_binaria":
-        output_meaning = (
-            "probabilidade (0 a 1)"
-            + (
-                " de o pullback continuar a tendência (>0.5 = continuação)"
-                if "pullback" in run_config["tarefa"].lower()
-                else " de alta no horizonte definido (>0.5 = alta)"
+        tarefa_lower = run_config["tarefa"].lower()
+        if "pullback" in tarefa_lower:
+            output_meaning = "probabilidade (0 a 1) de o pullback continuar a tendência (>0.5 = continuação)"
+        elif "reversão à média" in tarefa_lower or "reversao a media" in tarefa_lower:
+            output_meaning = (
+                "probabilidade (0 a 1) de a operação de reversão à média bater o alvo (TP) "
+                "antes do stop (SL) (>0.5 = TP primeiro)"
             )
-        )
+        else:
+            output_meaning = "probabilidade (0 a 1) de alta no horizonte definido (>0.5 = alta)"
     else:
         output_meaning = f"retorno percentual previsto {run_config.get('horizon')} barras à frente"
 
@@ -187,6 +189,7 @@ def export_to_onnx(
         "classes": REGIME_CLASSES if output_mode == "classificacao_multiclasse" else None,
         "parametros_pullback": run_config.get("parametros_pullback"),
         "parametros_regime": run_config.get("parametros_regime"),
+        "parametros_reversao_media": run_config.get("parametros_reversao_media"),
         "opset_version": OPSET_VERSION,
         "torch_version": torch.__version__,
         "export_date": datetime.now(timezone.utc).isoformat(),
