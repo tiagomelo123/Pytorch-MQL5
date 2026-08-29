@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
+data_cache/*.csv
+runs/*/
+!runs/.gitkeep
+!data_cache/.gitkeep

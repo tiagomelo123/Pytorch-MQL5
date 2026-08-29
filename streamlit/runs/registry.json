@@ -1,0 +1,33 @@
+[
+  {
+    "run_id": "EURUSD_LSTM_20260829_082852_37525c",
+    "criado_em": "2026-08-29T08:28:52",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Classificação (direção do preço)",
+    "arquitetura": "LSTM",
+    "feature_cols": [
+      "ret_1",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 128,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 38,
+    "melhor_epoca": 23,
+    "metrica_principal": "acuracia",
+    "valor_metrica": 0.4818670153617859,
+    "metricas_teste": {
+      "acuracia": 0.4818670153617859,
+      "precisao": 0.46277097078228085,
+      "recall": 0.7090252707581227,
+      "f1": 0.5600228115198176
+    },
+    "enviado_firebase": false
+  }
+]
