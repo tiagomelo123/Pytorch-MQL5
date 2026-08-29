@@ -29,5 +29,413 @@
       "f1": 0.5600228115198176
     },
     "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_MLP_20260829_091601_190396",
+    "criado_em": "2026-08-29T09:16:01",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Classificação (regime de mercado: baixa/lateral/alta)",
+    "output_mode": "classificacao_multiclasse",
+    "output_size": 3,
+    "arquitetura": "MLP",
+    "feature_cols": [
+      "rsi_14",
+      "vol_20",
+      "range_hl",
+      "dist_ema_fast",
+      "dist_ema_slow",
+      "trend_strength",
+      "adx_14"
+    ],
+    "lookback": 60,
+    "horizon": 20,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 17,
+    "melhor_epoca": 2,
+    "metrica_principal": "acuracia",
+    "valor_metrica": 0.39115872979164124,
+    "metricas_teste": {
+      "acuracia": 0.39115872979164124,
+      "f1_macro": 0.3163257681446036,
+      "f1_por_classe": [
+        0.24826789838337185,
+        0.5444895410552606,
+        0.15621986499517843
+      ],
+      "matriz_confusao": [
+        [
+          215,
+          148,
+          175
+        ],
+        [
+          795,
+          872,
+          367
+        ],
+        [
+          184,
+          149,
+          81
+        ]
+      ]
+    },
+    "enviado_firebase": false,
+    "parametros_regime": {
+      "regime_horizon": 20,
+      "vol_window": 20,
+      "k_lateral": 1.0,
+      "classes": [
+        "Baixa",
+        "Lateral",
+        "Alta"
+      ]
+    }
+  },
+  {
+    "run_id": "EURUSD_LSTM_20260829_092227_bce20d",
+    "criado_em": "2026-08-29T09:22:27",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Classificação (regime de mercado: baixa/lateral/alta)",
+    "output_mode": "classificacao_multiclasse",
+    "output_size": 3,
+    "arquitetura": "LSTM",
+    "feature_cols": [
+      "rsi_14",
+      "vol_20",
+      "range_hl",
+      "dist_ema_fast",
+      "dist_ema_slow",
+      "trend_strength",
+      "adx_14"
+    ],
+    "lookback": 60,
+    "horizon": 20,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 26,
+    "melhor_epoca": 11,
+    "metrica_principal": "acuracia",
+    "valor_metrica": 0.43871399760246277,
+    "metricas_teste": {
+      "acuracia": 0.43871399760246277,
+      "f1_macro": 0.31623484712990124,
+      "f1_por_classe": [
+        0.3348751156336725,
+        0.5730886850152905,
+        0.040740740740740744
+      ],
+      "matriz_confusao": [
+        [
+          362,
+          140,
+          36
+        ],
+        [
+          1018,
+          937,
+          79
+        ],
+        [
+          244,
+          159,
+          11
+        ]
+      ]
+    },
+    "enviado_firebase": false,
+    "parametros_regime": {
+      "regime_horizon": 20,
+      "vol_window": 20,
+      "k_lateral": 1.0,
+      "classes": [
+        "Baixa",
+        "Lateral",
+        "Alta"
+      ]
+    }
+  },
+  {
+    "run_id": "EURUSD_MLP_20260829_093559_e264a4",
+    "criado_em": "2026-08-29T09:35:59",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Classificação (direção do preço)",
+    "output_mode": "classificacao_binaria",
+    "output_size": 1,
+    "arquitetura": "MLP",
+    "feature_cols": [
+      "ret_1",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 60,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 16,
+    "melhor_epoca": 1,
+    "interrompido_manualmente": false,
+    "metrica_principal": "acuracia",
+    "valor_metrica": 0.511378824710846,
+    "metricas_teste": {
+      "acuracia": 0.511378824710846,
+      "precisao": 0.47186147186147187,
+      "recall": 0.3906810035842294,
+      "f1": 0.4274509803921569
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_MLP_20260829_093746_4e675a",
+    "criado_em": "2026-08-29T09:37:46",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Classificação (direção do preço)",
+    "output_mode": "classificacao_binaria",
+    "output_size": 1,
+    "arquitetura": "MLP",
+    "feature_cols": [
+      "ret_1",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 60,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.1,
+    "epochs_treinadas": 16,
+    "melhor_epoca": 1,
+    "interrompido_manualmente": false,
+    "metrica_principal": "acuracia",
+    "valor_metrica": 0.5110442042350769,
+    "metricas_teste": {
+      "acuracia": 0.5110442042350769,
+      "precisao": 0.4709507042253521,
+      "recall": 0.3835125448028674,
+      "f1": 0.42275780323982615
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_MLP_20260829_093839_80295d",
+    "criado_em": "2026-08-29T09:38:39",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Classificação (direção do preço)",
+    "output_mode": "classificacao_binaria",
+    "output_size": 1,
+    "arquitetura": "MLP",
+    "feature_cols": [
+      "ret_1",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 60,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.4,
+    "epochs_treinadas": 16,
+    "melhor_epoca": 1,
+    "interrompido_manualmente": false,
+    "metrica_principal": "acuracia",
+    "valor_metrica": 0.5190762877464294,
+    "metricas_teste": {
+      "acuracia": 0.5190762877464294,
+      "precisao": 0.4823529411764706,
+      "recall": 0.4114695340501792,
+      "f1": 0.444100580270793
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_LSTM_20260829_094215_21c114",
+    "criado_em": "2026-08-29T09:42:15",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Regressão (retorno futuro)",
+    "output_mode": "regressao",
+    "output_size": 1,
+    "arquitetura": "LSTM",
+    "feature_cols": [
+      "ret_1",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 100,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 6,
+    "melhor_epoca": 5,
+    "interrompido_manualmente": true,
+    "metrica_principal": "mae",
+    "valor_metrica": 0.0012649584095925093,
+    "metricas_teste": {
+      "mae": 0.0012649584095925093,
+      "rmse": 0.001769135589711368,
+      "r2": -0.043277621269226074
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_LSTM_20260829_094515_4cfa0d",
+    "criado_em": "2026-08-29T09:45:15",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Regressão (retorno futuro)",
+    "output_mode": "regressao",
+    "output_size": 1,
+    "arquitetura": "LSTM",
+    "feature_cols": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 100,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.3,
+    "epochs_treinadas": 4,
+    "melhor_epoca": 4,
+    "interrompido_manualmente": true,
+    "metrica_principal": "mae",
+    "valor_metrica": 0.0013020978076383471,
+    "metricas_teste": {
+      "mae": 0.0013020978076383471,
+      "rmse": 0.001794362091459334,
+      "r2": -0.07324254512786865
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_LSTM_20260829_094904_93be1a",
+    "criado_em": "2026-08-29T09:49:04",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Regressão (retorno futuro)",
+    "output_mode": "regressao",
+    "output_size": 1,
+    "arquitetura": "LSTM",
+    "feature_cols": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 100,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.22,
+    "epochs_treinadas": 4,
+    "melhor_epoca": 1,
+    "interrompido_manualmente": true,
+    "metrica_principal": "mae",
+    "valor_metrica": 0.001223764382302761,
+    "metricas_teste": {
+      "mae": 0.001223764382302761,
+      "rmse": 0.0017320566112175584,
+      "r2": -4.291534423828125e-06
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_MLP_20260829_095024_aca3df",
+    "criado_em": "2026-08-29T09:50:24",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Regressão (retorno futuro)",
+    "output_mode": "regressao",
+    "output_size": 1,
+    "arquitetura": "MLP",
+    "feature_cols": [
+      "ret_1",
+      "ret_3",
+      "sma_20",
+      "rsi_14",
+      "vol_20"
+    ],
+    "lookback": 100,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 56,
+    "melhor_epoca": 41,
+    "interrompido_manualmente": false,
+    "metrica_principal": "mae",
+    "valor_metrica": 0.0012443425366654992,
+    "metricas_teste": {
+      "mae": 0.0012443425366654992,
+      "rmse": 0.0017450418090447783,
+      "r2": -0.015054464340209961
+    },
+    "enviado_firebase": false
+  },
+  {
+    "run_id": "EURUSD_MLP_20260829_095738_96dfae",
+    "criado_em": "2026-08-29T09:57:38",
+    "dataset": "EURUSD_H1_20260829_080316.csv",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "tarefa": "Regressão (retorno futuro)",
+    "output_mode": "regressao",
+    "output_size": 1,
+    "arquitetura": "MLP",
+    "feature_cols": [
+      "ret_1",
+      "log_ret_1",
+      "sma_20",
+      "rsi_14",
+      "vol_20",
+      "dist_ema_fast"
+    ],
+    "lookback": 100,
+    "horizon": 5,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.2,
+    "epochs_treinadas": 40,
+    "melhor_epoca": 36,
+    "interrompido_manualmente": true,
+    "metrica_principal": "mae",
+    "valor_metrica": 0.0012337079970166087,
+    "metricas_teste": {
+      "mae": 0.0012337079970166087,
+      "rmse": 0.0017385231330990791,
+      "r2": -0.007485151290893555
+    },
+    "enviado_firebase": false
   }
 ]

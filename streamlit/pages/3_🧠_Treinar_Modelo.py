@@ -2,6 +2,8 @@
 
 import json
 import os
+import threading
+import time
 from datetime import datetime
 
 import joblib
@@ -53,6 +55,36 @@ from core.config import (
 
 st.set_page_config(page_title="Treinar Modelo", page_icon="🧠", layout="wide")
 st.title("🧠 Treinar Rede Neural")
+
+
+def _treinar_em_thread(model, loaders, config, output_mode, pos_weight, class_weights, stop_event, progress_state):
+    """Roda o treino em uma thread separada, para não bloquear a UI do
+    Streamlit e permitir que o botão "parar treinamento" seja processado
+    enquanto o treino está em andamento."""
+
+    def callback(epoch, total_epochs, tr_loss, val_loss, tr_metric, val_metric):
+        progress_state["historico"].append(
+            {
+                "epoch": epoch,
+                "train_loss": tr_loss,
+                "val_loss": val_loss,
+                "train_metric": tr_metric,
+                "val_metric": val_metric,
+            }
+        )
+        progress_state["epoch"] = epoch
+        progress_state["total_epochs"] = total_epochs
+
+    try:
+        resultado = train.train_model(
+            model, loaders, config, output_mode, progress_callback=callback,
+            pos_weight=pos_weight, class_weights=class_weights, stop_event=stop_event,
+        )
+        progress_state["resultado"] = resultado
+    except Exception as e:  # noqa: BLE001
+        progress_state["erro"] = str(e)
+    finally:
+        progress_state["done"] = True
 
 os.makedirs(DATA_DIR, exist_ok=True)
 arquivos_locais = sorted(f for f in os.listdir(DATA_DIR) if f.endswith(".csv"))
@@ -208,9 +240,15 @@ with c3:
     val_ratio = st.slider("Proporção validação", 0.05, 0.4, DEFAULT_VAL_RATIO)
 
 st.divider()
-iniciar = st.button("🚀 Iniciar treinamento", type="primary", disabled=(len(feature_keys) == 0))
+treino_em_andamento = "treino_ctx" in st.session_state
+iniciar = st.button(
+    "🚀 Iniciar treinamento", type="primary",
+    disabled=(len(feature_keys) == 0 or treino_em_andamento),
+)
 if len(feature_keys) == 0:
     st.info("Selecione ao menos uma feature para habilitar o treino.")
+if treino_em_andamento:
+    st.info("Já há um treinamento em andamento — veja o progresso e o botão de parar logo abaixo.")
 
 if iniciar:
     labels_df = None
@@ -335,141 +373,232 @@ if iniciar:
         "seed": DEFAULT_SEED,
     }
 
-    progresso = st.progress(0.0, text="Treinando...")
-    grafico_placeholder = st.empty()
-    metricas_placeholder = st.empty()
-    historico_ui: list[dict] = []
-
-    def callback(epoch, total_epochs, tr_loss, val_loss, tr_metric, val_metric):
-        progresso.progress(epoch / total_epochs, text=f"Época {epoch}/{total_epochs}")
-        historico_ui.append({"epoch": epoch, "train_loss": tr_loss, "val_loss": val_loss})
-        if epoch % max(1, total_epochs // 100) == 0 or epoch == total_epochs:
-            hist_df = pd.DataFrame(historico_ui).set_index("epoch")
-            grafico_placeholder.line_chart(hist_df[["train_loss", "val_loss"]], height=280)
-            nome_metrica = "Acurácia" if is_classificacao else "MAE"
-            metricas_placeholder.markdown(
-                f"**Época {epoch}** · train_loss={tr_loss:.6f} · val_loss={val_loss:.6f} · "
-                f"{nome_metrica} treino={tr_metric:.4f} · {nome_metrica} val={val_metric:.4f}"
-            )
-
-    resultado = train.train_model(
-        model, loaders, config, output_mode, progress_callback=callback,
-        pos_weight=pos_weight, class_weights=class_weights,
-    )
-    progresso.progress(1.0, text="Treino concluído.")
-
-    metricas_teste = train.evaluate(model, loaders["test"], output_mode)
-
-    st.success(f"Treino concluído — melhor época: {resultado['best_epoch']} (device: {resultado['device']})")
-
-    st.subheader("Métricas no conjunto de teste")
-    if output_mode == "classificacao_multiclasse":
-        m1, m2 = st.columns(2)
-        m1.metric("Acurácia", f"{metricas_teste['acuracia']:.2%}")
-        m2.metric("F1 (macro)", f"{metricas_teste['f1_macro']:.3f}")
-        st.write("F1 por classe:", {REGIME_CLASSES[i]: round(f, 3) for i, f in enumerate(metricas_teste["f1_por_classe"])})
-        st.write("Matriz de confusão (linhas = real, colunas = previsto):")
-        st.dataframe(
-            pd.DataFrame(metricas_teste["matriz_confusao"], index=REGIME_CLASSES, columns=REGIME_CLASSES),
-            use_container_width=True,
-        )
-        metrica_principal, valor_metrica = "acuracia", metricas_teste["acuracia"]
-    elif output_mode == "classificacao_binaria":
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Acurácia", f"{metricas_teste['acuracia']:.2%}")
-        m2.metric("Precisão", f"{metricas_teste['precisao']:.2%}")
-        m3.metric("Recall", f"{metricas_teste['recall']:.2%}")
-        m4.metric("F1", f"{metricas_teste['f1']:.3f}")
-        metrica_principal, valor_metrica = "acuracia", metricas_teste["acuracia"]
-    else:
-        m1, m2, m3 = st.columns(3)
-        m1.metric("MAE", f"{metricas_teste['mae']:.6f}")
-        m2.metric("RMSE", f"{metricas_teste['rmse']:.6f}")
-        m3.metric("R²", f"{metricas_teste['r2']:.4f}")
-        metrica_principal, valor_metrica = "mae", metricas_teste["mae"]
-
-    st.subheader("Previsto vs. Real (conjunto de teste)")
-    if output_mode == "classificacao_multiclasse":
-        df_pred = pd.DataFrame(
-            {"real": metricas_teste["reais"], "previsto": metricas_teste["predicoes"]}
-        ).reset_index(drop=True)
-        st.caption("Códigos de classe: " + ", ".join(f"{i}={n}" for i, n in enumerate(REGIME_CLASSES)))
-    else:
-        df_pred = pd.DataFrame(
-            {"real": metricas_teste["reais"], "previsto": metricas_teste["predicoes"]}
-        ).reset_index(drop=True)
-    st.line_chart(df_pred, height=280)
-
-    # --- Salvar artefatos localmente e no registry ---
-    symbol_nome = nome_dataset.split("_")[0]
-    run_id = registry.new_run_id(symbol_nome, arquitetura)
-    pasta = registry.run_dir(run_id)
-
-    torch.save(resultado["best_state"], os.path.join(pasta, "model.pt"))
-    joblib.dump(scaler, os.path.join(pasta, "scaler.pkl"))
-    pd.DataFrame(resultado["loss_history"]).to_json(os.path.join(pasta, "loss_history.json"), orient="records", indent=2)
-
-    metricas_serializaveis = {
-        k: (v.tolist() if hasattr(v, "tolist") else v)
-        for k, v in metricas_teste.items()
-        if k not in ("predicoes", "reais", "probabilidades")
+    stop_event = threading.Event()
+    progress_state = {
+        "historico": [],
+        "epoch": 0,
+        "total_epochs": int(epochs),
+        "done": False,
+        "erro": None,
+        "resultado": None,
     }
-    run_config = {
-        "run_id": run_id,
-        "criado_em": datetime.now().isoformat(timespec="seconds"),
-        "dataset": nome_dataset,
-        "symbol": symbol_nome,
-        "timeframe": nome_dataset.split("_")[1] if "_" in nome_dataset else "",
-        "tarefa": tarefa,
+    thread = threading.Thread(
+        target=_treinar_em_thread,
+        args=(model, loaders, config, output_mode, pos_weight, class_weights, stop_event, progress_state),
+        daemon=True,
+    )
+    st.session_state["treino_ctx"] = {
+        "stop_event": stop_event,
+        "progress": progress_state,
+        "model": model,
+        "loaders": loaders,
+        "scaler": scaler,
         "output_mode": output_mode,
         "output_size": output_size,
-        "arquitetura": arquitetura,
         "feature_cols": feature_cols,
         "lookback": int(lookback),
         "horizon": int(horizon),
+        "arquitetura": arquitetura,
         "hidden_size": int(hidden_size),
         "num_layers": int(num_layers),
         "dropout": dropout,
-        "epochs_treinadas": len(resultado["loss_history"]),
-        "melhor_epoca": resultado["best_epoch"],
-        "metrica_principal": metrica_principal,
-        "valor_metrica": valor_metrica,
-        "metricas_teste": metricas_serializaveis,
-        "enviado_firebase": False,
+        "nome_dataset": nome_dataset,
+        "tarefa": tarefa,
+        "is_classificacao": is_classificacao,
+        "parametros_pullback": (
+            {
+                "ema_fast": int(ema_fast),
+                "ema_slow": int(ema_slow),
+                "swing_order": int(swing_order),
+                "pullback_horizon": int(pullback_horizon),
+                "min_retracement": float(min_retracement),
+            }
+            if is_pullback
+            else None
+        ),
+        "parametros_regime": (
+            {
+                "regime_horizon": int(regime_horizon),
+                "vol_window": int(vol_window),
+                "k_lateral": float(k_lateral),
+                "classes": REGIME_CLASSES,
+            }
+            if is_regime
+            else None
+        ),
+        "parametros_reversao_media": (
+            {
+                "zscore_window": int(zscore_window),
+                "zscore_threshold": float(zscore_threshold),
+                "use_adx_filter": bool(use_adx_filter),
+                "adx_max": float(adx_max),
+                "atr_period": int(atr_period),
+                "tp_atr_mult": float(tp_atr_mult),
+                "sl_atr_mult": float(sl_atr_mult),
+                "mr_horizon": int(mr_horizon),
+            }
+            if is_mean_reversal
+            else None
+        ),
     }
-    if is_pullback:
-        run_config["parametros_pullback"] = {
-            "ema_fast": int(ema_fast),
-            "ema_slow": int(ema_slow),
-            "swing_order": int(swing_order),
-            "pullback_horizon": int(pullback_horizon),
-            "min_retracement": float(min_retracement),
-        }
-    if is_regime:
-        run_config["parametros_regime"] = {
-            "regime_horizon": int(regime_horizon),
-            "vol_window": int(vol_window),
-            "k_lateral": float(k_lateral),
-            "classes": REGIME_CLASSES,
-        }
-    if is_mean_reversal:
-        run_config["parametros_reversao_media"] = {
-            "zscore_window": int(zscore_window),
-            "zscore_threshold": float(zscore_threshold),
-            "use_adx_filter": bool(use_adx_filter),
-            "adx_max": float(adx_max),
-            "atr_period": int(atr_period),
-            "tp_atr_mult": float(tp_atr_mult),
-            "sl_atr_mult": float(sl_atr_mult),
-            "mr_horizon": int(mr_horizon),
-        }
+    thread.start()
+    st.rerun()
 
-    with open(os.path.join(pasta, "config.json"), "w", encoding="utf-8") as f:
-        json.dump(run_config, f, indent=2, ensure_ascii=False)
+if "treino_ctx" in st.session_state:
+    ctx = st.session_state["treino_ctx"]
+    progress_state = ctx["progress"]
+    historico = progress_state["historico"]
+    total_epochs = progress_state["total_epochs"]
 
-    registry.add_run(run_config)
-    st.session_state["ultimo_run_id"] = run_id
-    st.info(f"Modelo salvo localmente em `runs/{run_id}/`.")
+    st.subheader("Treinamento em andamento" if not progress_state["done"] else "Treinamento finalizado")
+    col_progresso, col_parar = st.columns([4, 1])
+    with col_parar:
+        if not progress_state["done"]:
+            if st.button("🛑 Parar treinamento"):
+                ctx["stop_event"].set()
+                st.caption("Parando após a época atual...")
+    with col_progresso:
+        if total_epochs:
+            fracao = min(1.0, progress_state["epoch"] / total_epochs)
+            texto = "Treino concluído." if progress_state["done"] else f"Época {progress_state['epoch']}/{total_epochs}"
+            st.progress(fracao, text=texto)
+
+    if historico:
+        hist_df = pd.DataFrame(historico).set_index("epoch")
+        st.line_chart(hist_df[["train_loss", "val_loss"]], height=280)
+        nome_metrica = "Acurácia" if ctx["is_classificacao"] else "MAE"
+        ultimo = historico[-1]
+        st.markdown(
+            f"**Época {ultimo['epoch']}** · train_loss={ultimo['train_loss']:.6f} · val_loss={ultimo['val_loss']:.6f} · "
+            f"{nome_metrica} treino={ultimo['train_metric']:.4f} · {nome_metrica} val={ultimo['val_metric']:.4f}"
+        )
+
+    if not progress_state["done"]:
+        time.sleep(1)
+        st.rerun()
+    else:
+        if progress_state["erro"]:
+            st.error(f"Erro durante o treino: {progress_state['erro']}")
+            del st.session_state["treino_ctx"]
+        elif not historico:
+            st.warning("Treinamento parado antes de completar a primeira época — nenhum modelo foi salvo.")
+            del st.session_state["treino_ctx"]
+        else:
+            resultado = progress_state["resultado"]
+            if resultado.get("interrompido"):
+                st.warning(
+                    f"Treinamento interrompido manualmente na época {historico[-1]['epoch']}. "
+                    f"Usando o melhor checkpoint encontrado até então (época {resultado['best_epoch']})."
+                )
+
+            model = ctx["model"]
+            loaders = ctx["loaders"]
+            scaler = ctx["scaler"]
+            output_mode = ctx["output_mode"]
+            output_size = ctx["output_size"]
+            feature_cols = ctx["feature_cols"]
+            lookback = ctx["lookback"]
+            horizon = ctx["horizon"]
+            arquitetura = ctx["arquitetura"]
+            hidden_size = ctx["hidden_size"]
+            num_layers = ctx["num_layers"]
+            dropout = ctx["dropout"]
+            nome_dataset = ctx["nome_dataset"]
+            tarefa = ctx["tarefa"]
+
+            metricas_teste = train.evaluate(model, loaders["test"], output_mode)
+            st.success(f"Treino concluído — melhor época: {resultado['best_epoch']} (device: {resultado['device']})")
+
+            st.subheader("Métricas no conjunto de teste")
+            if output_mode == "classificacao_multiclasse":
+                m1, m2 = st.columns(2)
+                m1.metric("Acurácia", f"{metricas_teste['acuracia']:.2%}")
+                m2.metric("F1 (macro)", f"{metricas_teste['f1_macro']:.3f}")
+                st.write("F1 por classe:", {REGIME_CLASSES[i]: round(f, 3) for i, f in enumerate(metricas_teste["f1_por_classe"])})
+                st.write("Matriz de confusão (linhas = real, colunas = previsto):")
+                st.dataframe(
+                    pd.DataFrame(metricas_teste["matriz_confusao"], index=REGIME_CLASSES, columns=REGIME_CLASSES),
+                    use_container_width=True,
+                )
+                metrica_principal, valor_metrica = "acuracia", metricas_teste["acuracia"]
+            elif output_mode == "classificacao_binaria":
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Acurácia", f"{metricas_teste['acuracia']:.2%}")
+                m2.metric("Precisão", f"{metricas_teste['precisao']:.2%}")
+                m3.metric("Recall", f"{metricas_teste['recall']:.2%}")
+                m4.metric("F1", f"{metricas_teste['f1']:.3f}")
+                metrica_principal, valor_metrica = "acuracia", metricas_teste["acuracia"]
+            else:
+                m1, m2, m3 = st.columns(3)
+                m1.metric("MAE", f"{metricas_teste['mae']:.6f}")
+                m2.metric("RMSE", f"{metricas_teste['rmse']:.6f}")
+                m3.metric("R²", f"{metricas_teste['r2']:.4f}")
+                metrica_principal, valor_metrica = "mae", metricas_teste["mae"]
+
+            st.subheader("Previsto vs. Real (conjunto de teste)")
+            if output_mode == "classificacao_multiclasse":
+                df_pred = pd.DataFrame(
+                    {"real": metricas_teste["reais"], "previsto": metricas_teste["predicoes"]}
+                ).reset_index(drop=True)
+                st.caption("Códigos de classe: " + ", ".join(f"{i}={n}" for i, n in enumerate(REGIME_CLASSES)))
+            else:
+                df_pred = pd.DataFrame(
+                    {"real": metricas_teste["reais"], "previsto": metricas_teste["predicoes"]}
+                ).reset_index(drop=True)
+            st.line_chart(df_pred, height=280)
+
+            # --- Salvar artefatos localmente e no registry ---
+            symbol_nome = nome_dataset.split("_")[0]
+            run_id = registry.new_run_id(symbol_nome, arquitetura)
+            pasta = registry.run_dir(run_id)
+
+            torch.save(resultado["best_state"], os.path.join(pasta, "model.pt"))
+            joblib.dump(scaler, os.path.join(pasta, "scaler.pkl"))
+            pd.DataFrame(resultado["loss_history"]).to_json(os.path.join(pasta, "loss_history.json"), orient="records", indent=2)
+
+            metricas_serializaveis = {
+                k: (v.tolist() if hasattr(v, "tolist") else v)
+                for k, v in metricas_teste.items()
+                if k not in ("predicoes", "reais", "probabilidades")
+            }
+            run_config = {
+                "run_id": run_id,
+                "criado_em": datetime.now().isoformat(timespec="seconds"),
+                "dataset": nome_dataset,
+                "symbol": symbol_nome,
+                "timeframe": nome_dataset.split("_")[1] if "_" in nome_dataset else "",
+                "tarefa": tarefa,
+                "output_mode": output_mode,
+                "output_size": output_size,
+                "arquitetura": arquitetura,
+                "feature_cols": feature_cols,
+                "lookback": int(lookback),
+                "horizon": int(horizon),
+                "hidden_size": int(hidden_size),
+                "num_layers": int(num_layers),
+                "dropout": dropout,
+                "epochs_treinadas": len(resultado["loss_history"]),
+                "melhor_epoca": resultado["best_epoch"],
+                "interrompido_manualmente": bool(resultado.get("interrompido")),
+                "metrica_principal": metrica_principal,
+                "valor_metrica": valor_metrica,
+                "metricas_teste": metricas_serializaveis,
+                "enviado_firebase": False,
+            }
+            if ctx["parametros_pullback"] is not None:
+                run_config["parametros_pullback"] = ctx["parametros_pullback"]
+            if ctx["parametros_regime"] is not None:
+                run_config["parametros_regime"] = ctx["parametros_regime"]
+            if ctx["parametros_reversao_media"] is not None:
+                run_config["parametros_reversao_media"] = ctx["parametros_reversao_media"]
+
+            with open(os.path.join(pasta, "config.json"), "w", encoding="utf-8") as f:
+                json.dump(run_config, f, indent=2, ensure_ascii=False)
+
+            registry.add_run(run_config)
+            st.session_state["ultimo_run_id"] = run_id
+            st.info(f"Modelo salvo localmente em `runs/{run_id}/`.")
+            del st.session_state["treino_ctx"]
 
 if "ultimo_run_id" in st.session_state:
     run_id = st.session_state["ultimo_run_id"]

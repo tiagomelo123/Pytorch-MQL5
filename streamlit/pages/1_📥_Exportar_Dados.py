@@ -24,35 +24,39 @@ if not mt5_data.is_available():
         "Rode `pip install MetaTrader5` e abra o terminal MT5 logado em uma conta."
     )
 
-with st.form("form_exportacao"):
-    c1, c2 = st.columns(2)
-    with c1:
-        symbol = st.selectbox(
-            "Símbolo", options=SYMBOLS_SUGERIDOS, index=0,
-            help="Selecione um símbolo sugerido ou digite outro no campo abaixo.",
-        )
-        symbol_manual = st.text_input("Ou digite outro símbolo", value="")
-        symbol_final = symbol_manual.strip().upper() or symbol
-    with c2:
-        timeframe = st.selectbox("Timeframe", options=TIMEFRAMES, index=TIMEFRAMES.index("H1"))
+c1, c2 = st.columns(2)
+with c1:
+    symbol = st.selectbox(
+        "Símbolo", options=SYMBOLS_SUGERIDOS, index=0,
+        help="Selecione um símbolo sugerido ou digite outro no campo abaixo.",
+    )
+    symbol_manual = st.text_input("Ou digite outro símbolo", value="")
+    symbol_final = symbol_manual.strip().upper() or symbol
+with c2:
+    timeframe = st.selectbox("Timeframe", options=TIMEFRAMES, index=TIMEFRAMES.index("H1"))
 
-    modo = st.radio("Modo de coleta", ["Quantidade de barras", "Intervalo de datas"], horizontal=True)
+modo = st.radio("Modo de coleta", ["Quantidade de barras", "Intervalo de datas"], horizontal=True)
 
-    if modo == "Quantidade de barras":
-        bars = st.number_input("Quantidade de barras", min_value=100, max_value=200000, value=DEFAULT_BARS_HISTORY, step=100)
-        data_inicio = data_fim = None
-    else:
-        bars = DEFAULT_BARS_HISTORY
-        colA, colB = st.columns(2)
-        with colA:
-            data_inicio = st.date_input("Data inicial", value=dt.date.today() - dt.timedelta(days=180))
-        with colB:
-            data_fim = st.date_input("Data final", value=dt.date.today())
+if modo == "Quantidade de barras":
+    bars = st.number_input("Quantidade de barras", min_value=100, max_value=200000, value=DEFAULT_BARS_HISTORY, step=100)
+    data_inicio = data_fim = None
+else:
+    bars = DEFAULT_BARS_HISTORY
+    colA, colB = st.columns(2)
+    with colA:
+        data_inicio = st.date_input("Data inicial", value=dt.date.today() - dt.timedelta(days=180))
+    with colB:
+        data_fim = st.date_input("Data final", value=dt.date.today())
+    if data_inicio > data_fim:
+        st.warning("A data inicial é posterior à data final — ajuste o intervalo antes de exportar.")
 
-    enviado = st.form_submit_button("🔗 Conectar ao MT5 e exportar", type="primary")
+enviado = st.button("🔗 Conectar ao MT5 e exportar", type="primary")
 
 if enviado:
     modo_interno = "barras" if modo == "Quantidade de barras" else "periodo"
+    if modo_interno == "periodo" and data_inicio > data_fim:
+        st.error("A data inicial não pode ser posterior à data final.")
+        st.stop()
     with st.spinner(f"Conectando ao MT5 e baixando {symbol_final} {timeframe}..."):
         try:
             df = mt5_data.export_ohlcv(

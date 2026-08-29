@@ -12,6 +12,7 @@ Suporta três modos de saída (``output_mode``):
 from __future__ import annotations
 
 import copy
+import threading
 import time
 from typing import Callable
 
@@ -116,6 +117,7 @@ def train_model(
     progress_callback: ProgressCallback | None = None,
     pos_weight: float | None = None,
     class_weights: list[float] | None = None,
+    stop_event: "threading.Event | None" = None,
 ) -> dict:
     """Treina o modelo com early stopping.
 
@@ -134,10 +136,17 @@ def train_model(
             (só ``classificacao_binaria``).
         class_weights: pesos por classe na ``CrossEntropyLoss``
             (só ``classificacao_multiclasse``).
+        stop_event: ``threading.Event`` opcional — quando setado (checado no
+            início de cada época), interrompe o treino antes de terminar
+            todas as épocas, mantendo o melhor checkpoint já encontrado até
+            então. Permite um botão "parar treinamento" na UI, rodando o
+            treino em uma thread separada.
 
     Returns:
         Dicionário com ``loss_history`` (lista de dicts), ``best_epoch``,
-        ``best_state`` (state_dict do melhor modelo) e ``device``.
+        ``best_state`` (state_dict do melhor modelo), ``device`` e
+        ``interrompido`` (``True`` se parado manualmente via ``stop_event``
+        antes de terminar as épocas ou o early stopping por paciência).
     """
     set_seed(config["seed"])
     device = get_device()
@@ -155,8 +164,12 @@ def train_model(
 
     epochs = config["epochs"]
     patience = config["patience"]
+    interrompido = False
 
     for epoch in range(1, epochs + 1):
+        if stop_event is not None and stop_event.is_set():
+            interrompido = True
+            break
         t0 = time.time()
         train_loss, train_metric = _run_epoch(model, loaders["train"], criterion, device, output_mode, optimizer)
         val_loss, val_metric = _run_epoch(model, loaders["val"], criterion, device, output_mode)
@@ -197,6 +210,7 @@ def train_model(
         "best_epoch": best_epoch,
         "best_state": best_state,
         "device": str(device),
+        "interrompido": interrompido,
     }
 
 
